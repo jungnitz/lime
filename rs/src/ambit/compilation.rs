@@ -1,10 +1,11 @@
 use super::{
-    optimization::optimize, Address, Architecture, BitwiseOperand, Program, ProgramState,
+    Address, Architecture, BitwiseOperand, Program, ProgramState,
     SingleRowAddress,
 };
 use crate::ambit::rows::Row;
 use eggmock::{Id, MigNode, Node, ProviderWithBackwardEdges, Signal};
 use rustc_hash::{FxHashMap, FxHashSet};
+use crate::ambit::optimization::optimize;
 
 pub fn compile<'a>(
     architecture: &'a Architecture,
@@ -12,33 +13,74 @@ pub fn compile<'a>(
 ) -> Program<'a> {
     let mut state = CompilationState::new(architecture, network);
     while !state.candidates.is_empty() {
-        let mut iter = state.candidates.iter().copied();
-        let (mut id, mut node) = iter.next().unwrap();
-        let mut min_outputs = state.network.node_outputs(id).count();
-        for (cand_id, cand_node) in iter {
-            let outputs = state.network.node_outputs(cand_id).count();
-            if outputs < min_outputs {
-                (id, node, min_outputs) = (cand_id, cand_node, outputs)
-            }
-        }
+        // select candidate and operation to calculate that candidate
+        let (_, &id, &node, op_idx) = state.candidates.iter().map(|(id, node)| {
+            let (len, op_idx) = architecture.maj_ops.iter().copied().map(|op_idx| {
+                state.program.snapshot();
+                state.program.compute(Signal::new(*id, false), *node, None, op_idx);
+                let len = state.program.instructions.len();
+                state.program.rollback();
+                (len, op_idx)
+            }).min_by_key(|v| v.0).unwrap();
+            (len, id, node, op_idx)
+        }).min_by_key(|v| v.0).unwrap();
+
+        let MigNode::Maj(signals) = node else {
+            panic!("not a maj");
+        };
+        let node_signal = Signal::new(id, false);
+
+        // perform actual calculation
         let output = state.outputs.get(&id).copied();
         if let Some((output, signal)) = output {
             if signal.is_inverted() {
-                state.compute(id, node, None);
+                state.program.compute(node_signal, node, None, op_idx);
                 state.program.signal_copy(
                     signal,
                     SingleRowAddress::Out(output),
                     state.program.rows().get_free_dcc().unwrap_or(0),
                 );
             } else {
-                state.compute(id, node, Some(Address::Out(output)));
+                state.program.compute(node_signal, node, Some(Address::Out(output)), op_idx);
             }
             let leftover_uses = *state.leftover_use_count(id);
             if leftover_uses == 1 {
                 state.program.free_id_rows(id);
             }
         } else {
-            state.compute(id, node, None);
+            state.program.compute(node_signal, node, None, op_idx);
+        }
+
+
+        // update candidates
+        state.candidates.remove(&(id, node));
+
+        // free up rows if possible
+        // (1) for the MAJ-signal
+        if *state.leftover_use_count(id) == 0 {
+            state.program.free_id_rows(id);
+        }
+        // (2) for the input signals
+        'outer: for i in 0..3 {
+            // decrease use count only once per id
+            for j in 0..i {
+                if signals[i].node_id() == signals[j].node_id() {
+                    continue 'outer;
+                }
+            }
+            *state.leftover_use_count(signals[i].node_id()) -= 1
+        }
+
+        // lastly, determine new candidates
+        for parent_id in state.network.node_outputs(id) {
+            let parent_node = state.network.node(parent_id);
+            if parent_node
+                .inputs()
+                .iter()
+                .all(|s| state.program.rows().contains_id(s.node_id()))
+            {
+                state.candidates.insert((parent_id, parent_node));
+            }
         }
     }
     let mut program = state.program.into();
@@ -93,140 +135,6 @@ impl<'a, 'n, P: ProviderWithBackwardEdges<Node = MigNode>> CompilationState<'a, 
         self.leftover_use_count.entry(id).or_insert_with(|| {
             self.network.node_outputs(id).count() + self.outputs.contains_key(&id) as usize
         })
-    }
-
-    pub fn compute(&mut self, id: Id, node: MigNode, out_address: Option<Address>) {
-        if !self.candidates.remove(&(id, node)) {
-            panic!("not a candidate");
-        }
-        let MigNode::Maj(mut signals) = node else {
-            panic!("can only compute majs")
-        };
-
-        // select which MAJ instruction to use
-        // for this we use the operation with has the most already correctly placed operands
-        let mut opt = None;
-        for id in self.architecture().maj_ops.iter().copied() {
-            let operands = self.architecture().multi_activations[id]
-                .as_slice()
-                .try_into()
-                .expect("maj has to have 3 operands");
-            let (matches, match_no) = self.get_mapping(&mut signals, operands);
-            let dcc_cost = self.optimize_dcc_usage(&mut signals, operands, &matches);
-            let spilling_cost = self.spilling_cost(operands, &matches);
-            let cost = 3.0 - match_no as f32 + dcc_cost as f32 + 0.5 * spilling_cost as f32;
-            let is_opt = match &opt {
-                None => true,
-                Some((opt_no, _, _, _)) => *opt_no > cost,
-            };
-            if is_opt {
-                opt = Some((cost, id, matches, signals));
-            }
-        }
-        let (_, maj_id, matches, signals) = opt.unwrap();
-        let operands = &self.architecture().multi_activations[maj_id];
-
-        // now we need to place the remaining non-matching operands...
-
-        // for that we first find a free DCC row for possibly inverting missing signals without
-        // accidentally overriding a signal that is already placed correctly
-        let used_dcc = || {
-            operands.iter().filter_map(|op| match op {
-                BitwiseOperand::DCC { index: i, .. } => Some(i),
-                _ => None,
-            })
-        };
-        let free_dcc = (0..self.architecture().num_dcc)
-            .find(|i| !used_dcc().any(|used| *used == *i))
-            .expect("cannot use all DCC rows in one MAJ operation");
-
-        // then we can copy the signals into their places
-        for i in 0..3 {
-            if matches[i] {
-                continue;
-            }
-            self.program
-                .signal_copy(signals[i], SingleRowAddress::Bitwise(operands[i]), free_dcc);
-        }
-
-        // all signals are in place, now we can perform the MAJ operation
-        self.program
-            .maj(maj_id, Signal::new(id, false), out_address);
-
-        // free up rows if possible
-        // (1) for the MAJ-signal
-        if *self.leftover_use_count(id) == 0 {
-            self.program.free_id_rows(id);
-        }
-        // (2) for the input signals
-        'outer: for i in 0..3 {
-            // decrease use count only once per id
-            for j in 0..i {
-                if signals[i].node_id() == signals[j].node_id() {
-                    continue 'outer;
-                }
-            }
-            *self.leftover_use_count(signals[i].node_id()) -= 1
-        }
-
-        // lastly, determine new candidates
-        for parent_id in self.network.node_outputs(id) {
-            let parent_node = self.network.node(parent_id);
-            if parent_node
-                .inputs()
-                .iter()
-                .all(|s| self.program.rows().contains_id(s.node_id()))
-            {
-                self.candidates.insert((parent_id, parent_node));
-            }
-        }
-    }
-
-    fn optimize_dcc_usage(
-        &self,
-        signals: &mut [Signal; 3],
-        operands: &[BitwiseOperand; 3],
-        matching: &[bool; 3],
-    ) -> i32 {
-        // first, try using a DCC row for all non-matching rows that require inversion
-        let mut dcc_adjusted = [false; 3];
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for i in 0..3 {
-                if matching[i]
-                    || operands[i].is_dcc()
-                    || self.program.rows().get_rows(signals[i]).next().is_some()
-                {
-                    continue;
-                }
-                // the i-th operand needs inversion. let's try doing this by swapping it with a
-                // signal of a DCC row so that we require one less copy operation
-                for j in 0..3 {
-                    if i == j || matching[j] || dcc_adjusted[j] {
-                        continue;
-                    }
-                    if operands[j].is_dcc() {
-                        signals.swap(i, j);
-                        dcc_adjusted[j] = true;
-                        changed = true;
-                    }
-                }
-            }
-        }
-
-        let mut cost = 0;
-        for ((signal, operand), matching) in signals.iter().zip(operands).zip(matching) {
-            if *matching || operand.is_dcc() {
-                continue;
-            }
-            // if the signal is not stored somewhere, i.e. only the inverted signal is present, this
-            // requires a move via a DCC row to the actual operand
-            if self.program.rows().get_rows(*signal).next().is_none() {
-                cost += 1
-            }
-        }
-        cost
     }
 
     fn spilling_cost(&self, operands: &[BitwiseOperand; 3], matching: &[bool; 3]) -> i32 {

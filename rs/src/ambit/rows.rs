@@ -2,6 +2,7 @@ use super::{Architecture, BitwiseOperand, SingleRowAddress};
 use eggmock::{Id, MigNode, ProviderWithBackwardEdges, Signal};
 use rustc_hash::FxHashMap;
 use std::collections::hash_map::Entry;
+use std::mem;
 
 /// Equivalent to a DRAM row.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -28,6 +29,10 @@ pub struct Rows<'a> {
     rows: FxHashMap<Row, Signal>,
     spill_counter: u32,
     architecture: &'a Architecture,
+
+    snapshotted: bool,
+    // contains tuples with (row, old_signal)
+    changes_since_snapshot: Vec<(Row, Option<Signal>)>,
 }
 
 impl<'a> Rows<'a> {
@@ -41,6 +46,8 @@ impl<'a> Rows<'a> {
             rows: FxHashMap::default(),
             spill_counter: 0,
             architecture,
+            snapshotted: false,
+            changes_since_snapshot: Vec::new(),
         };
         rows.add_leafs(ntk);
         rows
@@ -160,20 +167,62 @@ impl<'a> Rows<'a> {
         row_entry.insert_entry(signal);
         self.signals.entry(signal).or_default().push(row);
 
+        if self.snapshotted {
+            self.changes_since_snapshot.push((row, prev))
+        }
+
         prev
     }
 
     pub fn free_id_rows(&mut self, id: Id) {
         let non_inv = Signal::new(id, false);
         let inv = Signal::new(id, true);
-        for sig in [non_inv, inv] {
-            let Some(rows) = self.signals.remove(&sig) else {
-                continue
+        for signal in [non_inv, inv] {
+            let Some(rows) = self.signals.remove(&signal) else {
+                continue;
             };
             for row in rows {
+                if self.snapshotted {
+                    self.changes_since_snapshot.push((row, Some(signal)))
+                }
                 self.rows.remove(&row);
             }
         }
+    }
+
+    pub fn free_row_signal(&mut self, row: Row) -> Option<Signal> {
+        let Some(signal) = self.rows.remove(&row) else {
+            return None;
+        };
+        self.signals
+            .get_mut(&signal)
+            .unwrap()
+            .retain(|sig_row| *sig_row != row);
+        Some(signal)
+    }
+
+    pub fn snapshot(&mut self) {
+        if self.snapshotted {
+            panic!("already snapshotted")
+        }
+        self.snapshotted = true;
+    }
+
+    pub fn rollback(&mut self) {
+        if !self.snapshotted {
+            panic!("not snapshotted")
+        }
+        self.snapshotted = false;
+        let mut changes = mem::take(&mut self.changes_since_snapshot);
+        for (row, previous) in changes.iter().rev().cloned() {
+            match previous {
+                Some(signal) => self.set_row_signal(row, signal),
+                None => self.free_row_signal(row),
+            };
+        }
+        changes.clear();
+        // keep allocated heap space
+        mem::swap(&mut changes, &mut self.changes_since_snapshot);
     }
 }
 
