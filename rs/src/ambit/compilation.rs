@@ -75,9 +75,9 @@ pub struct CompilationState<'a, 'n, P> {
 impl<'a, 'n, P: ProviderWithBackwardEdges<Node = Mig>> CompilationState<'a, 'n, P> {
     pub fn new(architecture: &'a Architecture, network: &'n P) -> Self {
         let mut candidates = FxHashSet::default();
-        // check all parents of leafs whether they have only leaf children, in which case they are
+        // check all parents of leaves whether they have only leaf children, in which case they are
         // candidates
-        for leaf in network.leafs() {
+        for leaf in network.leaves() {
             for candidate_id in network.node_outputs(leaf) {
                 let candidate = network.node(candidate_id);
                 if candidate

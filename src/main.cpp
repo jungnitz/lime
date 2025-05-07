@@ -1,6 +1,7 @@
 #include "eggmock.h"
 
 #include "ambit.h"
+#include "fcdram.h"
 
 #include <mockturtle/io/write_dot.hpp>
 #include <mockturtle/networks/mig.hpp>
@@ -8,6 +9,39 @@
 
 using namespace mockturtle;
 using namespace eggmock;
+
+void run_ambit_example(mig_network in)
+{
+  ambit_compiler_statistics result = eggmock::send_mig( in, ambit_compile( ambit_compiler_settings{
+                                                           .print_program = true,
+                                                           .verbose = true,
+                                                       } ) );
+  std::cout << "IC:" << result.instruction_count << std::endl;
+  std::cout << "t1:" << result.t_runner << std::endl;
+  std::cout << "t2:" << result.t_extractor << std::endl;
+  std::cout << "t3:" << result.t_compiler << std::endl;
+  // mig_network rewritten = rewrite_mig( in, ambit_rewriter() );
+  // write_dot( rewritten, "out.dot" );
+
+}
+
+/**
+ * TODO: change `mig` to `aig`??
+ */
+void run_fcdram_example(mig_network in)
+{
+  fcdram_compiler_statistics result = eggmock::send_mig( in, fcdram_compile( fcdram_compiler_settings{
+                                                           .print_program = true,
+                                                           .verbose = true,
+                                                       } ) );
+  std::cout << "IC:" << result.instruction_count << std::endl;
+  std::cout << "t1:" << result.t_runner << std::endl;
+  std::cout << "t2:" << result.t_extractor << std::endl;
+  std::cout << "t3:" << result.t_compiler << std::endl;
+
+  // mig_network rewritten = rewrite_mig( in, fcdram_rewriter() );
+  // write_dot( rewritten, "out.dot" );
+}
 
 int main()
 {
@@ -22,16 +56,6 @@ int main()
   in.create_po( bi );
 
   write_dot( in, "in.dot" );
-
-  ambit_compiler_statistics result = eggmock::send_mig( in, ambit_compile( ambit_compiler_settings{
-                                                           .print_program = true,
-                                                           .verbose = true,
-                                                       } ) );
-  std::cout << "IC:" << result.instruction_count << std::endl;
-  std::cout << "t1:" << result.t_runner << std::endl;
-  std::cout << "t2:" << result.t_extractor << std::endl;
-  std::cout << "t3:" << result.t_compiler << std::endl;
-
-  // mig_network rewritten = rewrite_mig( in, ambit_rewriter() );
-  // write_dot( rewritten, "out.dot" );
+  run_ambit_example(in);
+  run_fcdram_example(in);
 }

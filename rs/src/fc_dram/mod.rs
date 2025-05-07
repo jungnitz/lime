@@ -1,8 +1,20 @@
+//! # Literature
+//!
+//! - [1] Functionally-Complete Boolean Logic in Real DRAM Chips: Experimental Characterization and Analysis, 2024
+//! - [2] FracDRAM: Fractional Values in Off-the-Shelf DRAM, 2022
+//! - [3] PULSAR: Simultaneous Many-Row Activation for Reliable and High-Performance Computing in Off-the-Shelf DRAM Chips, 2024
+//!
+//! # Submodules
+//!
+//! - [`architecture`] - defines Instructions (and performance-metrics of Instructions in that
+//! architecture) used in FC-DRAM
+//! - [`compilation`] - compiles given LogicNetwork for FC-DRAM architecture
+//! - [`generator`] — Generates output code or reports based on analysis.
 mod compilation;
 mod extraction;
 mod optimization;
 mod program;
-mod rows;
+mod architecture;
 
 use std::sync::LazyLock;
 use std::time::Instant;
@@ -13,85 +25,13 @@ use self::extraction::CompilingCostFunction;
 use eggmock::egg::{rewrite, EGraph, Extractor, Id, Rewrite, Runner};
 use eggmock::{
     Mig, MigLanguage, MigReceiverFFI, Provider, Receiver, ReceiverFFI, Rewriter,
-    RewriterFFI,
+    RewriterFFI, // TODO: add AOIG-rewrite (bc FC-DRAM supports AND&OR natively)?
 };
 use program::*;
-use rows::*;
+use architecture::*;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum BitwiseOperand {
-    T(u8),
-    DCC { inverted: bool, index: u8 },
-}
-
-#[derive(Clone, Debug)]
-pub struct Architecture {
-    maj_ops: Vec<usize>,
-    multi_activations: Vec<Vec<BitwiseOperand>>,
-    num_dcc: u8,
-}
-
-impl Architecture {
-    pub fn new(multi_activations: Vec<Vec<BitwiseOperand>>, num_dcc: u8) -> Self {
-        let maj_ops = multi_activations
-            .iter()
-            .enumerate()
-            .filter(|(_, ops)| ops.len() == 3)
-            .map(|(i, _)| i)
-            .collect();
-        Self {
-            maj_ops,
-            multi_activations,
-            num_dcc,
-        }
-    }
-}
-
-static ARCHITECTURE: LazyLock<Architecture> = LazyLock::new(|| {
-    use BitwiseOperand::*;
-    Architecture::new(
-        vec![
-            // 2 rows
-            vec![
-                DCC {
-                    index: 0,
-                    inverted: true,
-                },
-                T(0),
-            ],
-            vec![
-                DCC {
-                    inverted: true,
-                    index: 1,
-                },
-                T(1),
-            ],
-            vec![T(2), T(3)],
-            vec![T(0), T(3)],
-            // 3 rows
-            vec![T(0), T(1), T(2)],
-            vec![T(1), T(2), T(3)],
-            vec![
-                DCC {
-                    index: 0,
-                    inverted: false,
-                },
-                T(1),
-                T(2),
-            ],
-            vec![
-                DCC {
-                    index: 0,
-                    inverted: false,
-                },
-                T(0),
-                T(3),
-            ],
-        ],
-        2,
-    )
-});
-
+/// Rewrite rules to use in E-Graph Rewriting (see [egg](https://egraphs-good.github.io/))
+/// TODO: adjust rewriting rules to FCDRAM
 static REWRITE_RULES: LazyLock<Vec<Rewrite<MigLanguage, ()>>> = LazyLock::new(|| {
     let mut rules = vec![
         rewrite!("commute_1"; "(maj ?a ?b ?c)" => "(maj ?b ?a ?c)"),
@@ -106,51 +46,48 @@ static REWRITE_RULES: LazyLock<Vec<Rewrite<MigLanguage, ()>>> = LazyLock::new(||
     rules
 });
 
-impl BitwiseOperand {
-    pub fn row(&self) -> BitwiseRow {
-        match self {
-            BitwiseOperand::T(t) => BitwiseRow::T(*t),
-            BitwiseOperand::DCC { index, .. } => BitwiseRow::DCC(*index),
-        }
-    }
-    pub fn is_dcc(&self) -> bool {
-        matches!(self, BitwiseOperand::DCC { .. })
-    }
-    pub fn inverted(&self) -> bool {
-        matches!(self, BitwiseOperand::DCC { inverted: true, .. })
-    }
-}
+/// Store compilation output and timing statistics how long compilation stages took
+/// TODO: unit of t? sec or ms?
+struct CompilingReceiverResult {
+    /// Actual compilation result
+    output: CompilerOutput,
 
-struct CompilingReceiverResult<'a> {
-    output: CompilerOutput<'a>,
-
+    /// Statistics about compilation
     t_runner: u128,
     t_extractor: u128,
     t_compiler: u128,
 }
 
+/// Compilation result (program + E-Graph)
 #[ouroboros::self_referencing]
-struct CompilerOutput<'a> {
+struct CompilerOutput {
+    /// Result E-Graph
     graph: EGraph<MigLanguage, ()>,
     #[borrows(graph)]
     #[covariant]
     ntk: (
-        Extractor<'this, CompilingCostFunction<'a>, MigLanguage, ()>,
+        Extractor<'this, CompilingCostFunction, MigLanguage, ()>,
         Vec<Id>,
     ),
+    /// Compiled Program
     #[borrows(ntk)]
-    program: Program<'a>,
+    program: Program,
 }
 
+/// Initiates compilation and prints compilation-statistics
 fn compiling_receiver<'a>(
-    architecture: &'a Architecture,
     rules: &'a [Rewrite<MigLanguage, ()>],
     settings: CompilerSettings,
-) -> impl Receiver<Result = CompilingReceiverResult<'a>, Node = Mig> + 'a {
+) -> impl Receiver<Result = CompilingReceiverResult, Node = Mig> + use<'a> {
+    // REMINDER: EGraph implements `Receiver`
     EGraph::<MigLanguage, _>::new(()).map(move |(graph, outputs)| {
         let t_runner = std::time::Instant::now();
+
+        // run equivalence saturation
         let runner = Runner::default().with_egraph(graph).run(rules);
+
         let t_runner = t_runner.elapsed().as_millis();
+
         if settings.verbose {
             println!("== Runner Report");
             runner.print_report();
@@ -166,16 +103,14 @@ fn compiling_receiver<'a>(
                 let start_time = Instant::now();
                 let extractor = Extractor::new(
                     &graph,
-                    CompilingCostFunction {
-                        architecture: &architecture,
-                    },
+                    CompilingCostFunction {},
                 );
                 t_extractor = start_time.elapsed().as_millis();
                 (extractor, outputs)
             },
             |ntk| {
                 let start_time = Instant::now();
-                let program = compile(architecture, &ntk.with_backward_edges());
+                let program = compile(&ntk.with_backward_edges()); // actual compilation !!
                 t_compiler = start_time.elapsed().as_millis();
                 if settings.print_program || settings.verbose {
                     if settings.verbose {
@@ -208,21 +143,23 @@ struct CompilerSettings {
     verbose: bool,
 }
 
-struct AmbitRewriter(CompilerSettings);
+struct FCDramRewriter(CompilerSettings);
 
-impl Rewriter for AmbitRewriter {
+impl Rewriter for FCDramRewriter {
     type Node = Mig;
-    type Intermediate = CompilingReceiverResult<'static>;
+    type Intermediate = CompilingReceiverResult;
 
     fn create_receiver(
         &mut self,
-    ) -> impl Receiver<Node = Mig, Result = CompilingReceiverResult<'static>> + 'static {
-        compiling_receiver(&*ARCHITECTURE, REWRITE_RULES.as_slice(), self.0)
+    ) -> impl Receiver<Node = Mig, Result = CompilingReceiverResult> + 'static {
+
+        // todo!()
+        compiling_receiver(REWRITE_RULES.as_slice(), self.0)
     }
 
     fn rewrite(
         self,
-        result: CompilingReceiverResult<'static>,
+        result: CompilingReceiverResult,
         output: impl Receiver<Node = Mig, Result = ()>,
     ) {
         result.output.borrow_ntk().send(output);
@@ -230,8 +167,8 @@ impl Rewriter for AmbitRewriter {
 }
 
 #[no_mangle]
-extern "C" fn ambit_rewriter(settings: CompilerSettings) -> MigReceiverFFI<RewriterFFI<Mig>> {
-    RewriterFFI::new(AmbitRewriter(settings))
+extern "C" fn fcdram_rewriter(settings: CompilerSettings) -> MigReceiverFFI<RewriterFFI<Mig>> {
+    RewriterFFI::new(FCDramRewriter(settings))
 }
 
 #[repr(C)]
@@ -248,27 +185,11 @@ struct CompilerStatistics {
 }
 
 #[no_mangle]
-extern "C" fn ambit_compile(settings: CompilerSettings) -> MigReceiverFFI<CompilerStatistics> {
-    let receiver =
-        compiling_receiver(&*&ARCHITECTURE, REWRITE_RULES.as_slice(), settings).map(|res| {
-            let graph = res.output.borrow_graph();
-            CompilerStatistics {
-                egraph_classes: graph.number_of_classes() as u64,
-                egraph_nodes: graph.total_number_of_nodes() as u64,
-                egraph_size: graph.total_size() as u64,
-                instruction_count: res.output.borrow_program().instructions.len() as u64,
-                t_runner: res.t_runner as u64,
-                t_extractor: res.t_extractor as u64,
-                t_compiler: res.t_compiler as u64,
-            }
-        });
-    MigReceiverFFI::new(receiver)
-}
-
-#[no_mangle]
 extern "C" fn fcdram_compile(settings: CompilerSettings) -> MigReceiverFFI<CompilerStatistics> {
+    // todo!()
+    // TODO: create example `ARCHITECTURE` implementing `FCDRAMArchitecture`
     let receiver =
-        compiling_receiver(&*&ARCHITECTURE, REWRITE_RULES.as_slice(), settings).map(|res| {
+        compiling_receiver(REWRITE_RULES.as_slice(), settings).map(|res| {
             let graph = res.output.borrow_graph();
             CompilerStatistics {
                 egraph_classes: graph.number_of_classes() as u64,

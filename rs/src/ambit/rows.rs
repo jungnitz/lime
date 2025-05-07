@@ -42,14 +42,14 @@ impl<'a> Rows<'a> {
             spill_counter: 0,
             architecture,
         };
-        rows.add_leafs(ntk);
+        rows.add_leaves(ntk);
         rows
     }
 
-    fn add_leafs(&mut self, ntk: &impl ProviderWithBackwardEdges<Node = Mig>) {
-        let leafs = ntk.leafs();
-        self.rows.reserve(leafs.size_hint().0);
-        for id in leafs {
+    fn add_leaves(&mut self, ntk: &impl ProviderWithBackwardEdges<Node = Mig>) {
+        let leaves = ntk.leaves();
+        self.rows.reserve(leaves.size_hint().0);
+        for id in leaves {
             let node = ntk.node(id);
             match node {
                 Mig::Input(i) => {
