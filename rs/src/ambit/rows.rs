@@ -47,7 +47,7 @@ impl<'a> Rows<'a> {
     }
 
     fn add_leafs(&mut self, ntk: &impl NetworkWithBackwardEdges<Node = Mig>) {
-        let leafs = ntk.leafs();
+        let leafs = ntk.leaves();
         self.rows.reserve(leafs.size_hint().0);
         for id in leafs {
             let node = ntk.node(id);
