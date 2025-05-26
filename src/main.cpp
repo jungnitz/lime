@@ -1,10 +1,7 @@
-#include "eggmock.h"
-
 #include "ambit.h"
 
 #include <mockturtle/io/write_dot.hpp>
 #include <mockturtle/networks/mig.hpp>
-#include <sys/types.h>
 
 using namespace mockturtle;
 using namespace eggmock;
@@ -23,15 +20,18 @@ int main()
 
   write_dot( in, "in.dot" );
 
-  ambit_compiler_statistics result = eggmock::send_mig( in, ambit_compile( ambit_compiler_settings{
-                                                           .print_program = true,
-                                                           .verbose = true,
-                                                       } ) );
+  const auto settings = ambit_compiler_settings{
+      .print_program = true,
+      .verbose = true,
+      .preoptimize = true,
+      .rewrite = true,
+  };
+
+  auto [out, result] = ambit_rewrite( settings, in );
   std::cout << "IC:" << result.instruction_count << std::endl;
   std::cout << "t1:" << result.t_runner << std::endl;
   std::cout << "t2:" << result.t_extractor << std::endl;
   std::cout << "t3:" << result.t_compiler << std::endl;
 
-  // mig_network rewritten = rewrite_mig( in, ambit_rewriter() );
-  // write_dot( rewritten, "out.dot" );
+  write_dot( out, "out.dot" );
 }

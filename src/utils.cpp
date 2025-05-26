@@ -1,23 +1,27 @@
 #include "utils.h"
+
 #include <mockturtle/algorithms/cleanup.hpp>
-#include <mockturtle/algorithms/cut_rewriting.hpp>
+#include <mockturtle/algorithms/functional_reduction.hpp>
+#include <mockturtle/algorithms/mig_algebraic_rewriting.hpp>
+#include <mockturtle/algorithms/mig_inv_optimization.hpp>
+#include <mockturtle/algorithms/mig_inv_propagation.hpp>
 #include <mockturtle/algorithms/mig_resub.hpp>
-#include <mockturtle/algorithms/node_resynthesis/mig_npn.hpp>
+#include <mockturtle/algorithms/resubstitution.hpp>
 
 using namespace mockturtle;
 
 void preoptimize_mig( mockturtle::mig_network& ntk )
 {
-  // TODO: sensible defaults here or so
-  for ( int i = 0; i < 5; i++ )
-  {
-    mig_npn_resynthesis resyn;
-    cut_rewriting_params ps;
-    ps.cut_enumeration_ps.cut_size = 4;
-    ntk = cut_rewriting( ntk, resyn, ps );
+  depth_view depth_mig{ ntk };
+  fanout_view fanout_mig{ depth_mig };
+  resubstitution_params ps;
+  resubstitution_stats st;
 
-    // mig_resubstitution( ntk );
-  }
+  functional_reduction( fanout_mig );
+  mig_inv_optimization( fanout_mig );
+  mig_resubstitution2( fanout_mig, ps, &st );
+  // mig_resubstitution( fanout_mig,  ps, &st  );
 
+  mig_algebraic_depth_rewriting( depth_mig );
   ntk = cleanup_dangling( ntk );
 }

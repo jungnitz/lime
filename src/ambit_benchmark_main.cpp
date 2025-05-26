@@ -1,10 +1,10 @@
 #include "ambit.h"
-#include "eggmock.h"
 #include "utils.h"
+
+#include <mockturtle/networks/mig.hpp>
 
 #include <chrono>
 #include <iostream>
-#include <mockturtle/networks/mig.hpp>
 
 using namespace mockturtle;
 using namespace eggmock;
@@ -31,7 +31,6 @@ int main( int const argc, char** argv )
   preoptimize_mig( *mig );
   auto const t_opt = duration_cast<milliseconds>( system_clock::now() - opt_begin ).count();
 
-
   auto constexpr settings = ambit_compiler_settings{
       .print_program = false,
       .verbose = false,
@@ -39,8 +38,7 @@ int main( int const argc, char** argv )
 
   const auto [egraph_classes, egraph_nodes, egraph_size,
               instruction_count,
-              t_runner, t_extractor, t_compiler] =
-      send_mig( *mig, ambit_compile( settings ) );
+              t_runner, t_extractor, t_compiler] = ambit_compile( settings, *mig );
 
   std::cout << t_opt << "\t" << t_runner << "\t" << t_extractor << "\t" << t_compiler << "\t"
             << pre_opt_size << "\t" << mig->size() << "\t" << mig->num_cis() << "\t" << mig->num_cos() << "\t"
