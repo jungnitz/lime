@@ -37,6 +37,9 @@ See:
 Operations:
 - q' = p -> q, p destroyed
 
+Not: q = 0; p -> q => p' = ~q
+Copy: b, c = 0; a -> c; c -> b; => b' = a
+
 Operands:
 - Any rows
 - 0 / 1
@@ -48,6 +51,9 @@ See:
 
 Operations:
 - Z' = MAJ3(A, ~B, Z)
+
+Copy: Z = 0; Z' = MAJ3(A, 0, Z) => Z' = A
+Not: Z = 0; Z' = MAJ3(1, A, Z) => Z' = ~A
 
 Operands:
 - Any rows
@@ -66,6 +72,9 @@ Operations:
 - n-ary NOR
 - 2/3-ary NAND/Minority
 - Non destructive with different target row
+
+Not: B = NOR A
+Copy: B = OR A
 
 See:
 - [FELIX](https://acsweb.ucsd.edu/~sag076/papers/iccad18_felix.pdf)
