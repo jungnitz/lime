@@ -27,8 +27,7 @@ impl<A: Architecture> State<A> {
         self.signal_to_cells
             .get(&signal)
             .into_iter()
-            .map(|cells| cells.iter().copied())
-            .flatten()
+            .flat_map(|cells| cells.iter().copied())
     }
 
     /// Sets the signal of the given cell.

@@ -5,41 +5,47 @@ macro_rules! define_gp_architecture {
 define_gp_architecture! {
     Ambit {
         cells ([T; 4], [DCC; 2], [D]),
-        operand_sets (
-            DCC = [ (DCC), (!DCC) ],
-            any = [ (T), (D), ...DCC ],
-            any_and_const = [0, 1, ...any]
+        operands (
+            DCC = [(DCC), (!DCC)],
+            ANY = [(T), (D), ...DCC],
+            ANY_AND_CONST = [(1), (0), ...ANY],
             TRA = [
-                (T0, T1, T2),
-                (T1, T2, T3),
-                (T0, T1, !DCC0),
-            ],,
+                (T[0], T[1], T[2]),
+                (T[1], T[2], T[3]),
+                (T[0], T[1], !DCC[0]),
+            ],
             MRA = [
-                (T0, T1),
-                (T2, T3),
+                (T[0], T[1]),
+                (T[2], T[3]),
                 ...TRA
+            ],
+            OUTPUTS = [
+                (),
+                ...TRA,
+                ...ANY
             ]
         ),
         operations (
-            TRA = maj(...) -> maj(...),
-            any_and_const -> and(.0)
+            TRA(TRA = maj) -> maj,
+            RC(ANY_AND_CONST) -> and
         ),
-        outputs (
-            (),
-            any,
-            MRA,
-        )
+        outputs (OUTPUTS)
     }
 }
 
 define_gp_architecture! {
     IMPLY {
         cells([D]),
-        operand_sets (
-            imp = [(D * D)]
+        operands (
+            PAIR = [
+                (D, !D),
+                (_, !D),
+            ],
+            ANY = [(D)]
         ),
         operations (
-            imp = (.0, !and(.0, !.1))
+            IMP(PAIR = (_, and)),
+            FALSE(ANY = false)
         )
     }
 }
@@ -47,11 +53,14 @@ define_gp_architecture! {
 define_gp_architecture! {
     PLiM {
         cells([D]),
-        operand_sets (
-            triple: [(D * D * D)],
+        operands (
+            TRIPLET = [
+                (D, !D, D),
+                (_, _, D),
+            ],
         ),
         operations (
-            triple = (.0, .1, maj(.0, !.1, .2))
+            RMA3(TRIPLET = (_, _, maj))
         )
     }
 }
@@ -59,23 +68,23 @@ define_gp_architecture! {
 define_gp_architecture! {
     FELIX {
         cells([D]),
-        operand_sets (
-            any: [(D)],
-            nary: [(D*)]
-            three: [(D * D * D)],
-            two: [(D * D)],
+        operands (
+            ANY: [(D)],
+            NARY: [D]
+            TRIPLET: [(D, D, D)],
+            PAIR: [(D, D)],
         ),
         operations (
             // or
-            nary -> !and(!...),
+            OR(NARY -> or),
             // nor
-            nary -> and(!...)
+            NOR(NARY -> !or),
 
-            two -> !and(...),
-            three -> !and(...),
+            NAND2(PAIR -> !and),
+            NAND3(TRIPLET -> !and),
 
-            three -> !maj(...),
+            MIN(TRIPLET -> !maj),
         ),
-        outputs (any)
+        outputs (ANY)
     }
 }

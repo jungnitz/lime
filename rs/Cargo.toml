@@ -12,6 +12,7 @@ rustc-hash = "2.1.0"
 either = "1.13.0"
 smallvec = "1.14.0"
 ouroboros = "0.18.0"
+derive_more = { version = "2.0.1", features = ["full"] }
 
 [build-dependencies]
 eggmock = { path = "../../eggmock" }
