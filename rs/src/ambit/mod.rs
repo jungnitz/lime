@@ -71,7 +71,7 @@ static ARCHITECTURE: LazyLock<Architecture> = LazyLock::new(|| {
             vec![T(1), T(2), T(3)],
             vec![
                 DCC {
-                    index: 0,
+                    index: 1,
                     inverted: false,
                 },
                 T(1),
