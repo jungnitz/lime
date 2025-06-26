@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+lime-macros = { workspace = true }
 eggmock = { path = "../../eggmock" }
 rustc-hash = "2.1.0"
 either = "1.13.0"

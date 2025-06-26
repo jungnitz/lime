@@ -6,6 +6,7 @@ use super::{Architecture, Function, Operand, Operands};
 
 #[derive_where(Debug, Clone)]
 pub struct OperationType<A: Architecture> {
+    pub name: &'static str,
     pub input: Operands<A>,
     pub input_results: &'static [InputResult],
     pub output: Option<Function>,
@@ -21,6 +22,5 @@ pub struct Operation<A: Architecture> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputResult {
     Unchanged,
-    Destroyed,
     Function(Function),
 }

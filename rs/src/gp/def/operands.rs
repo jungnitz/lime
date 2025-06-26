@@ -1,6 +1,6 @@
 use std::{
     fmt::{self, Display},
-    rc::Rc,
+    sync::Arc,
 };
 
 use derive_more::{Deref, From};
@@ -89,7 +89,7 @@ impl<A: Architecture> NaryOperands<A> {
 #[derive_where(Debug, Clone)]
 pub enum Operands<A: Architecture> {
     Nary(NaryOperands<A>),
-    Tuples(Rc<OperandTuples<A>>),
+    Tuples(Arc<OperandTuples<A>>),
 }
 
 impl<A: Architecture> Operands<A> {
@@ -108,7 +108,7 @@ impl<A: Architecture> Operands<A> {
             };
             tuples.extend_from_slice(&operands.0);
         }
-        Self::Tuples(Rc::new(OperandTuples(tuples)))
+        Self::Tuples(Arc::new(OperandTuples(tuples)))
     }
 
     pub fn fit_cell(&self, cell: A::Cell) -> BoolSet {

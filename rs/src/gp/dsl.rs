@@ -1,3 +1,5 @@
+use std::thread;
+
 #[macro_export]
 macro_rules! define_gp_architecture {
     ($vis:vis $name:ident {
@@ -23,13 +25,11 @@ macro_rules! define_gp_architecture {
                     todo!()
                 }
             }
-            impl $name {
-                $(
-                    const [< OPERAND_ $op_name >]: std::sync::LazyLock< $crate::gp::Operands<Self> > = std::sync::LazyLock::new(|| {
-                        $crate::define_gp_architecture!(@operands $name $op)
-                    });
-                )*
-            }
+            $(
+                static [< $name:upper _OPERAND_ $op_name >]: std::sync::LazyLock< $crate::gp::Operands<$name> > = std::sync::LazyLock::new(|| {
+                    $crate::define_gp_architecture!(@operands $name $op)
+                });
+            )*
         }
         $crate::define_gp_architecture!(@cell_types $vis $name $($cell),*);
     };
@@ -144,7 +144,7 @@ macro_rules! define_gp_architecture {
             ],
             $crate::paste::paste! {
                 [
-                    $(&*Self::[< OPERAND_ $operand >]),*
+                    $(&*[< $arch_name:upper _OPERAND_ $operand >]),*
                 ]
             }
         )
@@ -244,17 +244,75 @@ macro_rules! define_gp_architecture {
         }
     };
 
-    // Functions, Gates and InputResult
-    (@function ! $gate:ident) => {
-        $crate::gp::Function {
-            gate: $crate::define_gp_architecture!(@gate $gate),
-            inverted: true,
+    // Operations
+    (
+        @operation_types
+        $arch_name:ident;
+        $(
+            $name:ident ( $ops:ident $(:=)? )
+        )*
+    ) => {
+
+    };
+    (@operation_type $arch_name:ident, $name:ident, $ops:ident, [$($acc:tt)*]; -> $($tail:tt)*) => {
+        $crate::gp::OperationType::< $arch_name > {
+            name: stringify!($name),
+            input: $crate::paste::paste([< $arch_name:upper _OPERAND_ $ops >]).clone(),
+            input_results: $crate::define_gp_architecture!(@input_results []; $($acc)*),
+            output: $crate::define_gp_architecture!(@parse_opt_function $($tail)*),
         }
     };
-    (@function $gate:ident) => {
+
+    // Functions, Gates and InputResult
+    // [InputResult]: @input_results []; _, _, !maj
+    (@input_results [$($acc:tt)*];) => {
+        [$($acc)*]
+    };
+    (@input_results [$($acc:tt)*]; , $($tail:tt)*) => {
+        $crate::define_gp_architecture!(@input_results [$($acc)* ,]; $($tail)*)
+    };
+    (@input_results [$($acc:tt)*]; ! $gate:ident $($tail:tt)*) => {
+        $crate::define_gp_architecture!(
+            @input_results
+            [
+                $($acc)*
+                $crate::gp::InputResult::Function(
+                    $crate::define_gp_architecture!(@function true $gate)
+                )
+            ];
+            $($tail)*
+        )
+    };
+    (@input_results [$($acc:tt)*]; _ $($tail:tt)*) => {
+        $crate::define_gp_architecture!(
+            @input_results
+            [
+                $($acc)*
+                $crate::gp::InputResult::Unchanged
+            ];
+            $($tail)*
+        )
+    };
+    (@input_results [$($acc:tt)*]; $gate:ident $($tail:tt)*) => {
+        $crate::define_gp_architecture!(
+            @input_results
+            [
+                $($acc)*
+                $crate::gp::InputResult::Function(
+                    $crate::define_gp_architecture!(@function false $gate)
+                )
+            ];
+            $($tail)*
+        )
+    };
+
+    (@parse_opt_function ! $gate:ident) => { Some($crate::define_gp_architecture!(@function true $gate)) };
+    (@parse_opt_function $gate:ident) => { Some($crate::define_gp_architecture!(@function false $gate)) };
+    (@parse_opt_function) => { None };
+    (@function $inverted:literal $gate:ident) => {
         $crate::gp::Function {
             gate: $crate::define_gp_architecture!(@gate $gate),
-            inverted: false,
+            inverted: $inverted,
         }
     };
     (@gate true) => { $crate::gp::Gate::Constant(true) };
@@ -263,10 +321,6 @@ macro_rules! define_gp_architecture {
 
     (@optional $value:expr) => { Some($value) };
     (@optional) => { None }
-}
-
-fn test() {
-    let gate = define_gp_architecture!(@function !true);
 }
 
 define_gp_architecture! {
@@ -293,7 +347,7 @@ define_gp_architecture! {
             ]
         ),
         operations (
-            TRA(TRA = maj) -> maj,
+            TRA((TRA := maj) -> maj),
             RC(ANY_AND_CONST) -> and
         ),
         outputs (OUTPUTS)
@@ -327,7 +381,7 @@ define_gp_architecture! {
             ]
         ),
         operations (
-            RMA3(TRIPLET = (_, _, maj))
+            RMA3(TRIPLET := _, _, maj -> maj)
         )
     }
 }
@@ -338,17 +392,19 @@ define_gp_architecture! {
         operands (
             ANY = [(D)],
             NARY = [D],
-            TRIPLET = [(D, D, D)],
-            PAIR = [(D, D)]
+            NOT_NARY = [!D],
+            TERNARY = [(D, D, D)],
+            BINARY = [(D, D)]
         ),
         operations (
             // or
-            OR(NARY -> or),
+            OR(NOT_NARY -> !and),
             // nor
-            NOR(NARY -> !or),
-            NAND2(PAIR -> !and),
-            NAND3(TRIPLET -> !and),
-            MIN(TRIPLET -> !maj),
+            NOR(NOT_NARY -> and),
+
+            NAND2(BINARY -> !and),
+            NAND3(TERNARY -> !and),
+            MIN(TERNARY -> !maj),
         ),
         outputs (ANY)
     }
