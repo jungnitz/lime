@@ -1,33 +1,58 @@
-use crate::BoolSet;
+use crate::{
+    gp::{CellType, Operand, Operation},
+    BoolSet,
+};
 
-use super::{Architecture, Function, Gate, InputResult, OperandSet, Operands, OperationType};
+use super::{Architecture, Function, Gate, InputResult, Operands, OperationType};
 
-pub fn set<A: Architecture>(arch: &A, cell: A::Cell, value: bool) {
+pub fn set<A: Architecture>(arch: &A, cell: A::Cell, value: bool) -> Vec<Operation<A>> {
+    let mut operations = Vec::new();
     for operation in arch.operations() {
-        let Operands::Sets(sets) = operation.input else {
-            todo!();
-        };
-        if let Some(output) = &operation.output {
-            if operation.input_results.is_empty() {
-                let gate_value = match arch.outputs().fit_cell(cell) {
-                    BoolSet::None => continue,
-                    BoolSet::All => None,
-                    BoolSet::Single(inverted) => Some(inverted ^ output.inverted),
+        // Option 1: use output
+        'opt1: {
+            if let Some(output) = operation.output {
+                if operation.input_results.is_empty() {
+                    let (inputs, inverted) = match arch.outputs().fit_cell(cell) {
+                        BoolSet::None => break 'opt1,
+                        BoolSet::All => {
+                            let Some((fn_value, ops)) = operation.input.try_fit_constants(output)
+                            else {
+                                break 'opt1;
+                            };
+                            (ops, fn_value != value)
+                        }
+                        BoolSet::Single(inverted) => {
+                            let Some(ops) = operation
+                                .input
+                                .try_fit_constants_to_fn(output, value ^ inverted)
+                            else {
+                                break 'opt1;
+                            };
+                            (ops, inverted)
+                        }
+                    };
+                    operations.push(Operation {
+                        typ: operation.clone(),
+                        inputs,
+                        outputs: vec![Operand { cell, inverted }],
+                    });
                 }
-                .map(|invert| invert ^ value);
             }
         }
 
         // Option 2: use overridden input value
-        for set in sets {
-            for (i, inverted) in set.positions(cell) {
-                let result = &operation.input_results[i];
-                let InputResult::Function(function) = result else {
-                    continue;
-                };
-            }
-        }
+        // for set in sets {
+        //     for (i, inverted) in set.positions(cell) {
+        //         let result = &operation.input_results[i];
+        //         let InputResult::Function(function) = result else {
+        //             continue;
+        //         };
+        //         // function.try_compute(value ^ inverted, operation.input, candidate_fn)
+        //     }
+        // }
     }
+    println!("{:?}", operations);
+    operations
 }
 
 // pub fn copy<A: Architecture>(arch: &A, from: A::Cell, to: A::Cell, invert: bool) {
