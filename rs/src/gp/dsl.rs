@@ -323,89 +323,90 @@ macro_rules! define_gp_architecture {
     (@optional) => { None }
 }
 
-define_gp_architecture! {
-    pub Ambit {
-        cells ([T; 4], [DCC; 2], [D]),
-        operands (
-            DCC = [(DCC), (!DCC)],
-            ANY = [(T), (D), ...DCC],
-            ANY_AND_CONST = [(bool), ...ANY],
-            TRA = [
-                (T[0], T[1], T[2]),
-                (T[1], T[2], T[3]),
-                (T[0], T[1], !DCC[0])
-            ],
-            MRA = [
-                (T[0], T[1]),
-                (T[2], T[3]),
-                ...TRA
-            ],
-            OUTPUTS = [
-                (),
-                ...TRA,
-                ...ANY
-            ]
-        ),
-        operations (
-            TRA((TRA := maj) -> maj),
-            RC(ANY_AND_CONST) -> and
-        ),
-        outputs (OUTPUTS)
-    }
-}
-
-define_gp_architecture! {
-    pub IMPLY {
-        cells([D]),
-        operands (
-            PAIR = [
-                (D, !D),
-                (bool, !D)
-            ],
-            ANY = [(D)]
-        ),
-        operations (
-            IMP(PAIR = (_, and)),
-            FALSE(ANY = false)
-        )
-    }
-}
-
-define_gp_architecture! {
-    pub PLiM {
-        cells([D]),
-        operands (
-            TRIPLET = [
-                (D, !D, D),
-                (bool, bool, D)
-            ]
-        ),
-        operations (
-            RMA3(TRIPLET := _, _, maj -> maj)
-        )
-    }
-}
-
-define_gp_architecture! {
-    pub FELIX {
-        cells([D]),
-        operands (
-            ANY = [(D)],
-            NARY = [D],
-            NOT_NARY = [!D],
-            TERNARY = [(D, D, D)],
-            BINARY = [(D, D)]
-        ),
-        operations (
-            // or
-            OR(NOT_NARY -> !and),
-            // nor
-            NOR(NOT_NARY -> and),
-
-            NAND2(BINARY -> !and),
-            NAND3(TERNARY -> !and),
-            MIN(TERNARY -> !maj),
-        ),
-        outputs (ANY)
-    }
-}
+// define_gp_architecture! {
+//     pub Ambit {
+//         cells ([T; 4], [DCC; 2], [D]),
+//         operands (
+//             DCC = [(DCC), (!DCC)],
+//             ANY = [(T), (D), ...DCC],
+//             ANY_AND_CONST = [(bool), ...ANY],
+//             TRA = [
+//                 (T[0], T[1], T[2]),
+//                 (T[1], T[2], T[3]),
+//                 (T[0], T[1], !DCC[0])
+//             ],
+//             MRA = [
+//                 (T[0], T[1]),
+//                 (T[2], T[3]),
+//                 ...TRA
+//             ],
+//             OUTPUTS = [
+//                 (),
+//                 ...TRA,
+//                 ...ANY
+//             ]
+//         ),
+//         operations (
+//             TRA(TRA := maj -> maj),
+//             RC(ANY_AND_CONST) -> and
+//         ),
+//         outputs (OUTPUTS)
+//     }
+// }
+//
+// define_gp_architecture! {
+//     pub IMPLY {
+//         cells([D]),
+//         operands (
+//             PAIR = [
+//                 (D, !D),
+//                 (bool, !D)
+//             ],
+//             ANY = [(D)]
+//         ),
+//         operations (
+//             IMP(PAIR = (_, and)),
+//             FALSE(ANY = false)
+//         )
+//     }
+// }
+//
+// define_gp_architecture! {
+//     pub PLiM {
+//         cells([D]),
+//         operands (
+//             TRIPLET = [
+//                 (D, !D, D),
+//                 (bool, bool, D)
+//             ]
+//         ),
+//         operations (
+//             RMA3(TRIPLET := _, _, maj -> maj)
+//         )
+//     }
+// }
+//
+// define_gp_architecture! {
+//     pub FELIX {
+//         cells([D]),
+//         operands (
+//             ANY = [(D)],
+//             NARY = [D],
+//             NOT_NARY = [!D],
+//             TERNARY = [(D, D, D)],
+//             BINARY = [(D, D)]
+//         ),
+//         operations (
+//             // or
+//             OR(NOT_NARY -> !and),
+//             // nor
+//             NOR(NOT_NARY -> and),
+//
+//             NAND2(BINARY -> !and),
+//             NAND3(TERNARY -> !and),
+//             MIN(TERNARY -> !maj),
+//         ),
+//         outputs (ANY)
+//     }
+// }
+//

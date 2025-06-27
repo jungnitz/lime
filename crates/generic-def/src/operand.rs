@@ -1,52 +1,47 @@
-use std::{fmt::Display, marker::PhantomData};
+use std::fmt::Display;
 
-use derive_where::derive_where;
+use crate::{BoolSet, display_maybe_inverted, display_opt_index};
 
-use crate::{gp::def::display_maybe_inverted, BoolSet};
+use super::{Cell, CellIndex, CellType};
 
-use super::{Architecture, Cell, CellIndex, CellType};
-
-#[derive_where(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Operand<A: Architecture> {
-    pub cell: A::Cell,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Operand<CT> {
+    pub cell: Cell<CT>,
     pub inverted: bool,
 }
 
-impl<A> Display for Operand<A>
+impl<CT> Display for Operand<CT>
 where
-    A: Architecture,
-    A::Cell: Display,
+    CT: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display_maybe_inverted(f, self.cell, self.inverted)
+        display_maybe_inverted(f, self.inverted)?;
+        write!(f, "{}", self.cell)
     }
 }
 
-#[derive_where(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OperandType<A: Architecture> {
-    pub typ: A::CellType,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OperandType<CT> {
+    pub typ: CT,
     pub inverted: bool,
     pub index: Option<CellIndex>,
 }
 
-impl<A> Display for OperandType<A>
+impl<CT> Display for OperandType<CT>
 where
-    A: Architecture,
-    A::CellType: Display,
-    A::Cell: Display,
+    CT: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.index {
-            None => display_maybe_inverted(f, self.typ, self.inverted),
-            Some(i) => display_maybe_inverted(f, A::cell(self.typ, i), self.inverted),
-        }
+        display_maybe_inverted(f, self.inverted)?;
+        write!(f, "{}", self.typ)?;
+        display_opt_index(f, self.index)
     }
 }
 
-impl<A: Architecture> OperandType<A> {
+impl<CT: CellType> OperandType<CT> {
     /// Checks whether the given `cell` can be used for an operand of this type. If it can, returns
     /// whether the operand must/can reference the inverted cell value.
-    pub fn fit(&self, cell: A::Cell) -> BoolSet {
+    pub fn fit(&self, cell: Cell<CT>) -> BoolSet {
         if self.typ == cell.typ() && self.index.is_none_or(|i| i == cell.index()) {
             BoolSet::from(self.inverted)
         } else {
@@ -55,16 +50,18 @@ impl<A: Architecture> OperandType<A> {
     }
 
     /// Attempts to find a constant value operand that fits this operand type and so that
+    ///
     /// * if `required` is given, the operand has its value
     /// * else if `preferred` is given and this operand matches both constants, the operand has the
     ///   preferred value
+    ///
     /// Returns the matching operand together with its value.
     pub fn try_fit_constant(
         &self,
         mut required: Option<bool>,
         mut preferred: Option<bool>,
-    ) -> Option<(bool, Operand<A>)> {
-        if self.typ != <A::CellType as CellType>::CONSTANT {
+    ) -> Option<(bool, Operand<CT>)> {
+        if self.typ != CT::CONSTANT {
             return None;
         }
         required = required.map(|required| required ^ self.inverted);
@@ -89,7 +86,7 @@ impl<A: Architecture> OperandType<A> {
             (
                 value ^ self.inverted,
                 Operand {
-                    cell: A::constant(value),
+                    cell: CT::constant(value),
                     inverted: self.inverted,
                 },
             )
@@ -101,46 +98,46 @@ impl<A: Architecture> OperandType<A> {
 mod tests {
     use itertools::Itertools;
 
-    use crate::gp::{Ambit, AmbitCell, AmbitCellType};
+    use crate::tests::DummyCellType;
 
     use super::*;
 
     #[test]
     fn fit() {
         assert_eq!(
-            OperandType::<Ambit> {
-                typ: AmbitCellType::DCC,
+            OperandType {
+                typ: DummyCellType::B,
                 inverted: true,
                 index: Some(10),
             }
-            .fit(AmbitCell::DCC(10)),
+            .fit(Cell::new(DummyCellType::B, 10)),
             BoolSet::Single(true)
         );
         assert_eq!(
-            OperandType::<Ambit> {
-                typ: AmbitCellType::T,
+            OperandType {
+                typ: DummyCellType::A,
                 inverted: false,
                 index: Some(1),
             }
-            .fit(AmbitCell::T(1)),
+            .fit(Cell::new(DummyCellType::A, 1)),
             BoolSet::Single(false)
         );
         assert_eq!(
-            OperandType::<Ambit> {
-                typ: AmbitCellType::DCC,
+            OperandType {
+                typ: DummyCellType::B,
                 inverted: true,
                 index: Some(0),
             }
-            .fit(AmbitCell::DCC(1)),
+            .fit(Cell::new(DummyCellType::B, 1)),
             BoolSet::None
         );
         assert_eq!(
-            OperandType::<Ambit> {
-                typ: AmbitCellType::D,
+            OperandType {
+                typ: DummyCellType::A,
                 inverted: true,
                 index: Some(0),
             }
-            .fit(AmbitCell::DCC(0)),
+            .fit(Cell::new(DummyCellType::B, 0)),
             BoolSet::None
         );
     }
@@ -152,8 +149,8 @@ mod tests {
                 .into_iter()
                 .tuple_combinations()
             {
-                let typ = OperandType::<Ambit> {
-                    typ: AmbitCellType::Constant,
+                let typ = OperandType {
+                    typ: DummyCellType::Constant,
                     inverted,
                     index: cell_value.map(|i| i as CellIndex),
                 };

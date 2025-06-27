@@ -1,0 +1,8 @@
+[package]
+name = "lime-generic-def"
+edition = "2024"
+
+[dependencies]
+itertools = { workspace = true }
+derive_more = { workspace = true }
+strum = { workspace = true }

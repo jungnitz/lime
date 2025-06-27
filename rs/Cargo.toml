@@ -8,15 +8,16 @@ crate-type = ["cdylib"]
 
 [dependencies]
 lime-macros = { workspace = true }
-eggmock = { path = "../../eggmock" }
-rustc-hash = "2.1.0"
-either = "1.13.0"
-smallvec = "1.14.0"
-ouroboros = "0.18.0"
-derive-where = "1.5.0"
-derive_more = { version = "2.0.1", features = ["full"] }
-paste = "1.0.15"
-itertools = "0.14.0"
+lime-generic-def = { workspace = true }
+eggmock = { workspace = true }
+rustc-hash = { workspace = true }
+either = { workspace = true }
+smallvec = { workspace = true }
+ouroboros = { workspace = true }
+derive-where = { workspace = true }
+derive_more = { workspace = true }
+paste = { workspace = true }
+itertools = { workspace = true }
 
 [build-dependencies]
-eggmock = { path = "../../eggmock" }
+eggmock = { workspace = true }

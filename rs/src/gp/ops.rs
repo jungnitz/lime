@@ -1,17 +1,20 @@
-use crate::{
-    gp::{CellType, Operand, Operation},
-    BoolSet,
-};
+use std::ops::Deref;
 
-use super::{Architecture, Function, Gate, InputResult, Operands, OperationType};
+use crate::gp::{BoolSet, CellType, Operand, Operation};
 
-pub fn set<A: Architecture>(arch: &A, cell: A::Cell, value: bool) -> Vec<Operation<A>> {
+use super::{Architecture, Cell, Function, Gate, InputResult, Operands, OperationType};
+
+pub fn set<CT: CellType>(
+    arch: &Architecture<CT>,
+    cell: Cell<CT>,
+    value: bool,
+) -> Vec<Operation<CT>> {
     let mut operations = Vec::new();
-    for operation in arch.operations() {
+    for operation in arch.operations().iter() {
         // Option 1: use output
         'opt1: {
             if let Some(output) = operation.output {
-                if operation.input_results.is_empty() {
+                if operation.input_results.unchanged() {
                     let (inputs, inverted) = match arch.outputs().fit_cell(cell) {
                         BoolSet::None => break 'opt1,
                         BoolSet::All => {
@@ -51,7 +54,7 @@ pub fn set<A: Architecture>(arch: &A, cell: A::Cell, value: bool) -> Vec<Operati
         //     }
         // }
     }
-    println!("{:?}", operations);
+    println!("{operations:?}");
     operations
 }
 

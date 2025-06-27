@@ -1,12 +1,16 @@
 use std::fmt::Display;
 
-use crate::gp::def::display_maybe_inverted;
+use strum::EnumString;
+
+use crate::display_maybe_inverted;
 
 // Gate type without input/output inverters
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString)]
+#[strum(ascii_case_insensitive)]
 pub enum Gate {
     And,
     Maj,
+    #[strum(disabled)]
     Constant(bool),
 }
 
@@ -91,7 +95,7 @@ impl Gate {
                 let mut num_target = 0;
                 for i in is {
                     let (required, preferred) = if let Some(arity) = arity {
-                        let required_target = (arity + 1) / 2;
+                        let required_target = arity.div_ceil(2);
                         if num_target >= required_target {
                             (None, None)
                         } else {
@@ -154,7 +158,7 @@ impl Function {
         &self,
         target: bool,
         arity: Option<usize>,
-        mut candidate_fn: impl FnMut(usize, Option<bool>, Option<bool>) -> Option<(bool, R)>,
+        candidate_fn: impl FnMut(usize, Option<bool>, Option<bool>) -> Option<(bool, R)>,
     ) -> Option<Vec<R>> {
         self.gate
             .try_compute(target ^ self.inverted, arity, candidate_fn)
@@ -169,7 +173,8 @@ impl Function {
 
 impl Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        display_maybe_inverted(f, self.gate, self.inverted)
+        display_maybe_inverted(f, self.inverted)?;
+        write!(f, "{}", self.gate)
     }
 }
 
