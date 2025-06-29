@@ -1,10 +1,8 @@
 use std::{collections::hash_map::Entry, hash::Hash};
 
 use eggmock::Signal;
-use lime_generic_def::{Cell, CellType};
+use lime_generic_def::{Architecture, Cell, CellType};
 use rustc_hash::FxHashMap;
-
-use super::Architecture;
 
 /// Keeps track of the state of the cells in a memory array.
 ///

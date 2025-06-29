@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use crate::{BoolSet, display_maybe_inverted, display_opt_index};
-
-use super::{Cell, CellIndex, CellType};
+use crate::{BoolSet, Cell, CellIndex, CellType, display_maybe_inverted, display_opt_index};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Operand<CT> {

@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use derive_more::{Deref, From};
 
-use crate::{BoolSet, Cell, CellType};
-
-use super::{Function, Operand, OperandType};
+use crate::{BoolSet, Cell, CellType, Function, Operand, OperandType};
 
 #[derive(Deref, From, Debug, Clone)]
 #[deref(forward)]
@@ -67,6 +65,13 @@ impl<CT> TupleOperands<CT> {
 }
 
 impl<CT: CellType> TupleOperands<CT> {
+    pub fn fit(&self, cell: Cell<CT>) -> BoolSet {
+        self.tuples
+            .iter()
+            .filter(|set| set.len() == 1)
+            .map(|set| set[0].fit(cell))
+            .collect()
+    }
     pub fn try_fit_constants_to_fn(
         &self,
         function: Function,
@@ -114,6 +119,7 @@ pub enum Operands<CT> {
 }
 
 impl<CT> Operands<CT> {
+    /// Returns the number of decribed operands or `None` if the number is variable.
     pub fn arity(&self) -> Option<usize> {
         match self {
             Self::Nary(_) => None,
@@ -123,17 +129,18 @@ impl<CT> Operands<CT> {
 }
 
 impl<CT: CellType> Operands<CT> {
+    /// Returns the inverted-values for which using **only** the given cell for the described
+    /// operands described is valid
     pub fn fit_cell(&self, cell: Cell<CT>) -> BoolSet {
         match self {
-            Self::Tuples(tuples) => tuples
-                .tuples
-                .iter()
-                .filter(|set| set.len() == 1)
-                .map(|set| set[0].fit(cell))
-                .collect(),
+            Self::Tuples(tuples) => tuples.fit(cell),
             Self::Nary(typ) => typ.0.fit(cell),
         }
     }
+
+    /// Attempt to use only constants for the described operands and so that the result of the given
+    /// function with the selected operands is the target `value`.
+    /// Returns the matched operands on success, or `None` if not possible.
     pub fn try_fit_constants_to_fn(
         &self,
         function: Function,
@@ -144,6 +151,10 @@ impl<CT: CellType> Operands<CT> {
             Self::Tuples(tuples) => tuples.try_fit_constants_to_fn(function, value),
         }
     }
+
+    /// Attempt to use only constants for the described operands.
+    /// Returns the value of the given function and the selected operands on success or `None` if
+    /// not possible.
     pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
         match self {
             Self::Nary(nary) => nary.try_fit_constants(function),

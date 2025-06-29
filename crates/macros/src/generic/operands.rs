@@ -6,13 +6,11 @@ use quote::{ToTokens, quote};
 use std::collections::BTreeMap;
 use syn::{Error, Ident, Result};
 
-use crate::generic::{
-    CellType,
+use super::{
+    CellType, Cells, ast,
     ast::{NameAndOperands, OperandTuplesElement},
     krate,
 };
-
-use super::{Cells, ast};
 
 #[derive(Deref, DerefMut)]
 pub struct NamedOperands(pub BTreeMap<String, Operands<CellType>>);

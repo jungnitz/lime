@@ -3,7 +3,7 @@ use lime_generic_def as def;
 use quote::{ToTokens, quote};
 use syn::Result;
 
-use crate::generic::{CellType, OperandsValue, ast, krate, operands::NamedOperands};
+use super::{CellType, OperandsValue, ast, krate, operands::NamedOperands};
 
 pub struct Outputs(pub def::Outputs<CellType>);
 

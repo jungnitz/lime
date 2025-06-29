@@ -1,7 +1,11 @@
+/// A set of booleans, i.e. either `{}`, `{true}`, `{false}` or `{true, false}`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoolSet {
+    /// `{}`
     None,
+    /// `{<value>}`
     Single(bool),
+    /// `{true, false}`
     All,
 }
 

@@ -185,7 +185,7 @@ pub struct Evaluation {
 
 impl Evaluation {
     pub fn add(&mut self, value: bool) {
-        self.num[value as usize] += 1
+        self.num[value as usize] += 1;
     }
     pub fn get(self) -> bool {
         let total = self.num[0] + self.num[1];

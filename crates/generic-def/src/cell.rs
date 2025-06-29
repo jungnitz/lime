@@ -6,6 +6,8 @@ use crate::display_index;
 pub type CellIndex = u32;
 
 pub trait CellType: Copy + Debug + PartialEq + Eq + Hash {
+    /// The type of the constant (pseudo-)cell. This cell type has 2 cells where the cell index
+    /// is equivalent to the cell value (i.e. `0` is `false` and `1` is true)
     const CONSTANT: Self;
 
     /// Number of cells of this type or `None` if infinite amount is available.

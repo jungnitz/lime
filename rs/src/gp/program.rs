@@ -1,8 +1,7 @@
 use std::{fmt::Debug, hash::Hash};
 
 use eggmock::egg::{EGraph, Id, Language};
-
-use super::Operation;
+use lime_generic_def::Operation;
 
 pub type ProgramEGraph<A> = EGraph<ProgramLanguage<Operation<A>>, ()>;
 

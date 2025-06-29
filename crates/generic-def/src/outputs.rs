@@ -15,6 +15,7 @@ impl<CT> Outputs<CT> {
 }
 
 impl<CT: CellType> Outputs<CT> {
+    /// See: [Operands::fit_cell]
     pub fn fit_cell(&self, cell: Cell<CT>) -> BoolSet {
         self.iter().map(|ops| ops.fit_cell(cell)).collect()
     }

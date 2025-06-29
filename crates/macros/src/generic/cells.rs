@@ -6,9 +6,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Error, Ident, Result};
 
-use crate::generic::{ast::BoolOrIdent, krate};
-
-use super::ast;
+use super::{ast, ast::BoolOrIdent, krate};
 
 #[derive(Deref)]
 pub struct Cells {

@@ -1,8 +1,6 @@
-use std::ops::Deref;
+use lime_generic_def::{Architecture, BoolSet, Cell, CellType, Operand, Operation};
 
-use crate::gp::{BoolSet, CellType, Operand, Operation};
-
-use super::{Architecture, Cell, Function, Gate, InputResult, Operands, OperationType};
+use crate::gp::{Ambit, AmbitCellType};
 
 pub fn set<CT: CellType>(
     arch: &Architecture<CT>,
@@ -54,8 +52,14 @@ pub fn set<CT: CellType>(
         //     }
         // }
     }
-    println!("{operations:?}");
+    println!("{operations:#?}");
     operations
+}
+
+#[test]
+fn test() {
+    let ambit = Ambit::new();
+    set(&ambit, Cell::new(AmbitCellType::DCC, 0), false);
 }
 
 // pub fn copy<A: Architecture>(arch: &A, from: A::Cell, to: A::Cell, invert: bool) {

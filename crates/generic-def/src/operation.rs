@@ -2,7 +2,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use derive_more::Deref;
 
-use super::{Function, Operand, Operands};
+use crate::{Function, Operand, Operands};
 
 #[derive(Debug, Clone, Deref)]
 #[deref(forward)]

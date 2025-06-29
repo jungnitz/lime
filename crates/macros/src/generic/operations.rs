@@ -8,7 +8,7 @@ use lime_generic_def::{Function, Gate, InputResult, InputResults, OperationType}
 use quote::{ToTokens, quote};
 use syn::{Error, Result};
 
-use crate::generic::{
+use super::{
     CellType, OperandsValue,
     ast::{self},
     krate,
