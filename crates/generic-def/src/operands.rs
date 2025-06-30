@@ -2,31 +2,27 @@ use std::sync::Arc;
 
 use derive_more::{Deref, From};
 
-use crate::{BoolSet, Cell, CellType, Function, Operand, OperandType, OperandTypes};
+use crate::{BoolHint, BoolSet, Cell, CellType, Function, Operand, OperandType, OperandTypes};
 
 /// Keep track of used constants so that we do not use a constant cell twice
 #[derive(Default)]
 struct ConstantUse(BoolSet);
 
 impl ConstantUse {
-    pub fn map_req_pref<CT: CellType>(
-        &self,
-        op: &OperandType<CT>,
-        required: Option<bool>,
-        preferred: Option<bool>,
-    ) -> Option<(Option<bool>, Option<bool>)> {
+    pub fn map_hint<CT: CellType>(&self, op: &OperandType<CT>, hint: BoolHint) -> Option<BoolHint> {
+        // required value from previous uses
         let use_required = match self.0 {
             BoolSet::Single(cell_value) => Some(!cell_value ^ op.inverted),
             BoolSet::None => None,
             BoolSet::All => return None,
         };
-        if let Some(required) = required
+        if let BoolHint::Require(required) = hint
             && let Some(use_required) = use_required
             && required != use_required
         {
             return None;
         }
-        Some((use_required, use_required.or(preferred)))
+        Some(use_required.map(BoolHint::Require).unwrap_or(hint))
     }
     pub fn add_op<CT: CellType>(&mut self, op: &Operand<CT>) {
         self.0 = self
@@ -52,10 +48,10 @@ impl<CT: CellType> OperandTuple<CT> {
         value: bool,
     ) -> Option<Vec<Operand<CT>>> {
         let mut used = ConstantUse::default();
-        function.try_compute(value, Some(self.len()), |i, required, preferred| {
+        function.try_compute(value, Some(self.len()), |i, hint| {
             let op = &self[i];
-            let (required, preferred) = used.map_req_pref(op, required, preferred)?;
-            let (value, operand) = op.try_fit_constant(required, preferred)?;
+            let hint = used.map_hint(op, hint)?;
+            let (value, operand) = op.try_fit_constant(hint)?;
             used.add_op(&operand);
             Some((value, operand))
         })
@@ -65,13 +61,13 @@ impl<CT: CellType> OperandTuple<CT> {
         let mut eval = function.evaluate();
         let mut used = ConstantUse::default();
         for typ in self.iter() {
-            let (required, preferred) = used.map_req_pref(typ, None, None)?;
-            let (value, op) = typ.try_fit_constant(required, preferred)?;
+            let hint = used.map_hint(typ, BoolHint::Any)?;
+            let (value, op) = typ.try_fit_constant(hint)?;
             used.add_op(&op);
             result.push(op);
             eval.add(value);
         }
-        Some((eval.get(), result))
+        eval.evaluate().map(|value| (value, result))
     }
 }
 
@@ -138,16 +134,22 @@ impl<CT: CellType> NaryOperands<CT> {
         function: Function,
         value: bool,
     ) -> Option<Vec<Operand<CT>>> {
-        function.try_compute(value, None, |_, _, preferred| {
-            self.0.try_fit_constant(preferred, preferred)
+        function.try_compute(value, None, |_, hint| {
+            let hint = match hint {
+                BoolHint::Prefer(v) => BoolHint::Require(v),
+                _ => hint,
+            };
+            self.0.try_fit_constant(hint)
         })
     }
     pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
-        self.0.try_fit_constant(None, None).map(|(value, op)| {
-            let mut eval = function.evaluate();
-            eval.add(value);
-            (eval.get(), vec![op])
-        })
+        self.0
+            .try_fit_constant(BoolHint::Any)
+            .and_then(|(value, op)| {
+                let mut eval = function.evaluate();
+                eval.add(value);
+                eval.evaluate().map(|value| (value, vec![op]))
+            })
     }
 }
 

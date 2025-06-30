@@ -1,8 +1,16 @@
+mod and;
+mod constant;
+mod maj;
+
 use std::fmt::Display;
 
+use delegate::delegate;
 use strum::EnumString;
 
-use crate::display_maybe_inverted;
+use crate::{
+    BoolHint, display_maybe_inverted,
+    func::{and::AndEval, constant::ConstEval, maj::MajEval},
+};
 
 // Gate type without input/output inverters
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString)]
@@ -15,6 +23,14 @@ pub enum Gate {
 }
 
 impl Gate {
+    pub fn evaluate(&self) -> GateEvaluation {
+        match self {
+            Self::And => GateEvaluation::And(AndEval::new()),
+            Self::Maj => GateEvaluation::Maj(MajEval::new()),
+            Self::Constant(c) => GateEvaluation::Const(ConstEval::new(*c)),
+        }
+    }
+
     /// Try to find a set of input values so that the value of this gate is the given target
     /// value.
     ///
@@ -22,10 +38,7 @@ impl Gate {
     /// until the target value is reached and has the following arguments:
     ///
     /// - The current input argument index (in `0..arity` or `0..`) and for the input at that index
-    /// - the value that is **required** in order for the gate to have the target value. If a
-    ///   different value is returned, this function returns `None`.
-    /// - the value that is **preferred**. Returning such a value will potentially result in more
-    ///   freedom for later inputs
+    /// - a hint that indicates valid or "good" choices for each input value
     ///
     /// The return value of the candidate function indicates the chosen value for this input as the
     /// first value. The second value is collected into the returned `Vec` (in order of the input
@@ -35,102 +48,37 @@ impl Gate {
         self,
         target: bool,
         arity: Option<usize>,
-        mut candidate_fn: impl FnMut(usize, Option<bool>, Option<bool>) -> Option<(bool, R)>,
+        mut candidate_fn: impl FnMut(usize, BoolHint) -> Option<(bool, R)>,
     ) -> Option<Vec<R>> {
         let mut results = match arity {
             Some(arity) => Vec::with_capacity(arity),
             None => Vec::new(),
         };
-        let mut candidate_fn = |i, required, preferred| {
-            let (value, r) = candidate_fn(i, required, preferred)?;
-            if required.is_none_or(|required| value == required) {
-                Some((value, r))
-            } else {
-                None
+        let mut candidate_fn = |i, hint| {
+            let (value, r) = candidate_fn(i, hint)?;
+            match hint {
+                BoolHint::Require(required) if required != value => None,
+                _ => Some((value, r)),
             }
         };
 
-        // 0..arity or 0..
-        let is = {
-            let a = arity.map(|arity| 0..arity).into_iter().flatten();
-            let b = match arity {
-                Some(_) => None,
-                None => Some(0..),
+        let mut eval = self.evaluate();
+        for i in 0.. {
+            match arity {
+                Some(arity) if i == arity => break,
+                None if eval.evaluate() == Some(target) => break,
+                _ => {}
             }
-            .into_iter()
-            .flatten();
-            a.chain(b)
-        };
-
-        match self {
-            Gate::And => {
-                let mut current_value = true;
-                for i in is {
-                    let required = if target {
-                        Some(true)
-                    } else if Some(i + 1) == arity && current_value {
-                        Some(false)
-                    } else {
-                        None
-                    };
-                    let preferred = if !target && !current_value {
-                        None
-                    } else {
-                        Some(target)
-                    };
-                    let (value, r) = candidate_fn(i, required, preferred)?;
-                    results.push(r);
-                    current_value &= value;
-                    debug_assert!(!target || current_value, "AND no longer fulfillable");
-                    if current_value == target && arity.is_none() {
-                        return Some(results);
-                    }
-                }
-            }
-            Gate::Maj => {
-                debug_assert!(
-                    arity.is_none_or(|arity| arity % 2 == 1),
-                    "MAJ has to have uneven arity"
-                );
-                let mut num_target = 0;
-                for i in is {
-                    let (required, preferred) = if let Some(arity) = arity {
-                        let required_target = arity.div_ceil(2);
-                        if num_target >= required_target {
-                            (None, None)
-                        } else {
-                            let missing_values = required_target - num_target;
-                            let leftover = arity - i;
-                            debug_assert!(leftover >= missing_values, "MAJ no longer fullfillable");
-                            if missing_values == leftover {
-                                (Some(target), Some(target))
-                            } else {
-                                (None, Some(target))
-                            }
-                        }
-                    } else {
-                        (None, Some(target))
-                    };
-                    let (value, r) = candidate_fn(i, required, preferred)?;
-                    results.push(r);
-                    if value == target {
-                        num_target += 1;
-                    }
-                    if arity.is_none() && i % 2 == 0 && num_target > i / 2 {
-                        return Some(results);
-                    }
-                }
-            }
-            Gate::Constant(c) => {
-                if c != target {
-                    return None;
-                }
-                let n = arity.unwrap_or(0);
-                for i in 0..n {
-                    results.push(candidate_fn(i, None, None)?.1);
-                }
-            }
+            let hint = eval.hint(arity, target)?;
+            let (value, r) = candidate_fn(i, hint)?;
+            results.push(r);
+            eval.add(value);
         }
+        debug_assert_eq!(
+            eval.evaluate(),
+            Some(target),
+            "did not compute target value correctly"
+        );
         Some(results)
     }
 }
@@ -158,15 +106,15 @@ impl Function {
         &self,
         target: bool,
         arity: Option<usize>,
-        candidate_fn: impl FnMut(usize, Option<bool>, Option<bool>) -> Option<(bool, R)>,
+        candidate_fn: impl FnMut(usize, BoolHint) -> Option<(bool, R)>,
     ) -> Option<Vec<R>> {
         self.gate
             .try_compute(target ^ self.inverted, arity, candidate_fn)
     }
-    pub fn evaluate(self) -> Evaluation {
-        Evaluation {
-            function: self,
-            num: [0, 0],
+    pub fn evaluate(self) -> FunctionEvaluation {
+        FunctionEvaluation {
+            inverted: self.inverted,
+            gate: self.gate.evaluate(),
         }
     }
 }
@@ -178,37 +126,52 @@ impl Display for Function {
     }
 }
 
-pub struct Evaluation {
-    function: Function,
-    num: [u16; 2],
+trait EvaluationMethods {
+    fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
+    fn add(&mut self, value: bool);
+    fn evaluate(&self) -> Option<bool>;
 }
 
-impl Evaluation {
-    pub fn add(&mut self, value: bool) {
-        self.num[value as usize] += 1;
+pub struct FunctionEvaluation {
+    inverted: bool,
+    gate: GateEvaluation,
+}
+
+impl FunctionEvaluation {
+    pub fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint> {
+        self.gate.hint(arity, target ^ self.inverted)
     }
-    pub fn get(self) -> bool {
-        let total = self.num[0] + self.num[1];
-        let gate_value = match self.function.gate {
-            Gate::Constant(c) => c,
-            Gate::And => {
-                assert!(total > 0, "no value for AND given");
-                self.num[0] == 0 // no falses
-            }
-            Gate::Maj => {
-                assert!(
-                    total % 2 == 1,
-                    "even number of arguments to MAJ given ({total})"
-                );
-                self.num[1] > self.num[0]
-            }
-        };
-        gate_value ^ self.function.inverted
+    pub fn add(&mut self, value: bool) {
+        self.gate.add(value);
+    }
+    pub fn evaluate(&self) -> Option<bool> {
+        self.gate.evaluate().map(|v| v ^ self.inverted)
+    }
+}
+
+pub enum GateEvaluation {
+    And(AndEval),
+    Maj(MajEval),
+    Const(ConstEval),
+}
+
+impl GateEvaluation {
+    delegate! {
+        to match self {
+            Self::And(and) => and,
+            Self::Maj(maj) => maj,
+            Self::Const(c) => c,
+        } {
+            fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
+            fn add(&mut self, value: bool);
+            fn evaluate(&self) -> Option<bool>;
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::BoolHint::*;
     use super::*;
 
     #[test]
@@ -225,7 +188,7 @@ mod tests {
             }
             .evaluate();
             values.iter().for_each(|value| eval.add(*value));
-            assert_eq!(eval.get(), result, "invalid result")
+            assert_eq!(eval.evaluate(), Some(result), "invalid result")
         }
     }
 
@@ -243,7 +206,7 @@ mod tests {
             }
             .evaluate();
             values.iter().for_each(|value| eval.add(*value));
-            assert_eq!(eval.get(), result, "invalid result")
+            assert_eq!(eval.evaluate(), Some(result), "invalid result")
         }
     }
 
@@ -261,31 +224,29 @@ mod tests {
             }
             .evaluate();
             values.iter().for_each(|value| eval.add(*value));
-            assert_eq!(eval.get(), c, "invalid result")
+            assert_eq!(eval.evaluate(), Some(c), "invalid result")
         }
     }
 
+    #[derive(Debug)]
     struct TryComputeTest {
         gate: Gate,
         target: bool,
         arity: Option<usize>,
-        candidate_fn: &'static [(Option<bool>, Option<bool>, Option<bool>)],
+        candidate_fn: &'static [(BoolHint, Option<bool>)],
         success: bool,
     }
 
     impl TryComputeTest {
         pub fn run(&self) {
             let mut max_i = -1;
-            let result = self
-                .gate
-                .try_compute(self.target, self.arity, |i, req, pref| {
-                    assert_eq!(max_i + 1, i as i32, "candidate_fn not called consecutive");
-                    max_i = i as i32;
-                    let values = self.candidate_fn[i];
-                    assert_eq!(req, values.0, "invalid required for i = {i}");
-                    assert_eq!(pref, values.1, "invalid preferred for i = {i}");
-                    values.2.map(|v| (v, i))
-                });
+            let result = self.gate.try_compute(self.target, self.arity, |i, hint| {
+                assert_eq!(max_i + 1, i as i32, "candidate_fn not called consecutive");
+                max_i = i as i32;
+                let values = self.candidate_fn[i];
+                assert_eq!(hint, values.0, "invalid hint for i = {i}");
+                values.1.map(|v| (v, i))
+            });
             if let Some(is) = result {
                 assert!(self.success, "expected failure");
                 match self.arity {
@@ -319,7 +280,7 @@ mod tests {
                 gate: Gate::Maj,
                 target: true,
                 arity: None,
-                candidate_fn: &[(None, Some(true), Some(true))],
+                candidate_fn: &[(Prefer(true), Some(true))],
                 success: true,
             },
             TryComputeTest {
@@ -327,9 +288,9 @@ mod tests {
                 target: true,
                 arity: None,
                 candidate_fn: &[
-                    (None, Some(true), Some(false)),
-                    (None, Some(true), Some(true)),
-                    (None, Some(true), Some(true)),
+                    (Prefer(true), Some(false)),
+                    (Prefer(true), Some(true)),
+                    (Prefer(true), Some(true)),
                 ],
                 success: true,
             },
@@ -338,11 +299,11 @@ mod tests {
                 target: false,
                 arity: None,
                 candidate_fn: &[
-                    (None, Some(false), Some(true)),
-                    (None, Some(false), Some(false)),
-                    (None, Some(false), Some(true)),
-                    (None, Some(false), Some(false)),
-                    (None, Some(false), Some(false)),
+                    (Prefer(false), Some(true)),
+                    (Prefer(false), Some(false)),
+                    (Prefer(false), Some(true)),
+                    (Prefer(false), Some(false)),
+                    (Prefer(false), Some(false)),
                 ],
                 success: true,
             },
@@ -350,7 +311,7 @@ mod tests {
                 gate: Gate::Maj,
                 target: true,
                 arity: Some(1),
-                candidate_fn: &[(Some(true), Some(true), Some(true))],
+                candidate_fn: &[(Require(true), Some(true))],
                 success: true,
             },
             TryComputeTest {
@@ -358,9 +319,9 @@ mod tests {
                 target: true,
                 arity: Some(3),
                 candidate_fn: &[
-                    (None, Some(true), Some(false)),
-                    (Some(true), Some(true), Some(true)),
-                    (Some(true), Some(true), Some(true)),
+                    (Prefer(true), Some(false)),
+                    (Require(true), Some(true)),
+                    (Require(true), Some(true)),
                 ],
                 success: true,
             },
@@ -369,9 +330,9 @@ mod tests {
                 target: true,
                 arity: Some(3),
                 candidate_fn: &[
-                    (None, Some(true), Some(true)),
-                    (None, Some(true), Some(false)),
-                    (Some(true), Some(true), Some(true)),
+                    (Prefer(true), Some(true)),
+                    (Prefer(true), Some(false)),
+                    (Require(true), Some(true)),
                 ],
                 success: true,
             },
@@ -380,11 +341,11 @@ mod tests {
                 target: false,
                 arity: Some(5),
                 candidate_fn: &[
-                    (None, Some(false), Some(true)),
-                    (None, Some(false), Some(false)),
-                    (None, Some(false), Some(true)),
-                    (Some(false), Some(false), Some(false)),
-                    (Some(false), Some(false), Some(false)),
+                    (Prefer(false), Some(true)),
+                    (Prefer(false), Some(false)),
+                    (Prefer(false), Some(true)),
+                    (Require(false), Some(false)),
+                    (Require(false), Some(false)),
                 ],
                 success: true,
             },
@@ -393,11 +354,11 @@ mod tests {
                 target: false,
                 arity: Some(5),
                 candidate_fn: &[
-                    (None, Some(false), Some(false)),
-                    (None, Some(false), Some(false)),
-                    (None, Some(false), Some(false)),
-                    (None, None, Some(false)),
-                    (None, None, Some(false)),
+                    (Prefer(false), Some(false)),
+                    (Prefer(false), Some(false)),
+                    (Prefer(false), Some(false)),
+                    (Any, Some(false)),
+                    (Any, Some(false)),
                 ],
                 success: true,
             },
@@ -414,7 +375,7 @@ mod tests {
                 gate: Gate::And,
                 target: true,
                 arity: None,
-                candidate_fn: &[(Some(true), Some(true), Some(true))],
+                candidate_fn: &[(Require(true), Some(true))],
                 success: true,
             },
             TryComputeTest {
@@ -422,10 +383,7 @@ mod tests {
                 gate: Gate::And,
                 target: true,
                 arity: Some(2),
-                candidate_fn: &[
-                    (Some(true), Some(true), Some(true)),
-                    (Some(true), Some(true), Some(true)),
-                ],
+                candidate_fn: &[(Require(true), Some(true)), (Require(true), Some(true))],
                 success: true,
             },
             TryComputeTest {
@@ -433,7 +391,7 @@ mod tests {
                 gate: Gate::And,
                 target: true,
                 arity: Some(2),
-                candidate_fn: &[(Some(true), Some(true), Some(false))],
+                candidate_fn: &[(Require(true), Some(false))],
                 success: false,
             },
             TryComputeTest {
@@ -442,9 +400,9 @@ mod tests {
                 target: false,
                 arity: None,
                 candidate_fn: &[
-                    (None, Some(false), Some(true)),
-                    (None, Some(false), Some(true)),
-                    (None, Some(false), Some(false)),
+                    (Prefer(false), Some(true)),
+                    (Prefer(false), Some(true)),
+                    (Prefer(false), Some(false)),
                 ],
                 success: true,
             },
@@ -453,10 +411,7 @@ mod tests {
                 gate: Gate::And,
                 target: false,
                 arity: Some(2),
-                candidate_fn: &[
-                    (None, Some(false), Some(true)),
-                    (Some(false), Some(false), Some(false)),
-                ],
+                candidate_fn: &[(Prefer(false), Some(true)), (Require(false), Some(false))],
                 success: true,
             },
             TryComputeTest {
@@ -464,7 +419,7 @@ mod tests {
                 gate: Gate::And,
                 target: false,
                 arity: Some(2),
-                candidate_fn: &[(None, Some(false), Some(false)), (None, None, Some(true))],
+                candidate_fn: &[(Prefer(false), Some(false)), (Any, Some(true))],
                 success: true,
             },
             TryComputeTest {
@@ -472,7 +427,7 @@ mod tests {
                 gate: Gate::And,
                 target: false,
                 arity: Some(2),
-                candidate_fn: &[(None, Some(false), Some(false)), (None, None, None)],
+                candidate_fn: &[(Prefer(false), Some(false)), (Any, None)],
                 success: false,
             },
         ] {
@@ -503,14 +458,14 @@ mod tests {
                 gate: Gate::Constant(false),
                 target: false,
                 arity: Some(2),
-                candidate_fn: &[(None, None, Some(true)), (None, None, Some(false))],
+                candidate_fn: &[(Any, Some(true)), (Any, Some(false))],
                 success: true,
             },
             TryComputeTest {
                 gate: Gate::Constant(true),
                 target: true,
                 arity: Some(2),
-                candidate_fn: &[(None, None, Some(true)), (None, None, None)],
+                candidate_fn: &[(Any, Some(true)), (Any, None)],
                 success: false,
             },
         ] {

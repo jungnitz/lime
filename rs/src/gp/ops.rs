@@ -45,15 +45,6 @@ pub fn set<CT: CellType + Display>(
         }
 
         // Option 2: use overridden input value
-        // for set in sets {
-        //     for (i, inverted) in set.positions(cell) {
-        //         let result = &operation.input_results[i];
-        //         let InputResult::Function(function) = result else {
-        //             continue;
-        //         };
-        //         // function.try_compute(value ^ inverted, operation.input, candidate_fn)
-        //     }
-        // }
     }
     println!("{}", operations.iter().format("\n"));
     operations

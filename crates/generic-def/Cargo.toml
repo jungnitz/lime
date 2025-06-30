@@ -6,3 +6,4 @@ edition = "2024"
 itertools = { workspace = true }
 derive_more = { workspace = true }
 strum = { workspace = true }
+delegate = { workspace = true }

@@ -2,7 +2,9 @@ use std::fmt::Display;
 
 use derive_more::{Deref, From};
 
-use crate::{BoolSet, Cell, CellIndex, CellType, display_maybe_inverted, display_opt_index};
+use crate::{
+    BoolHint, BoolSet, Cell, CellIndex, CellType, display_maybe_inverted, display_opt_index,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Operand<CT> {
@@ -56,31 +58,22 @@ impl<CT: CellType> OperandType<CT> {
     ///   preferred value
     ///
     /// Returns the matching operand together with its value.
-    pub fn try_fit_constant(
-        &self,
-        mut required: Option<bool>,
-        mut preferred: Option<bool>,
-    ) -> Option<(bool, Operand<CT>)> {
+    pub fn try_fit_constant(&self, mut hint: BoolHint) -> Option<(bool, Operand<CT>)> {
         if self.typ != CT::CONSTANT {
             return None;
         }
-        required = required.map(|required| required ^ self.inverted);
-        preferred = preferred.map(|preferred| preferred ^ self.inverted);
-        match self.index {
-            None => Some(required.or(preferred).unwrap_or(true)),
-            Some(i) => {
-                let cell_value = i != 0;
-                match required {
-                    None => Some(cell_value),
-                    Some(required) => {
-                        if required == cell_value {
-                            Some(cell_value)
-                        } else {
-                            None
-                        }
-                    }
+        hint = hint.map(|v| v ^ self.inverted);
+        match (self.index, hint) {
+            (None, BoolHint::Require(v)) | (None, BoolHint::Prefer(v)) => Some(v),
+            (None, BoolHint::Any) => Some(true),
+            (Some(i), BoolHint::Require(required)) => {
+                if required == (i != 0) {
+                    Some(required)
+                } else {
+                    None
                 }
             }
+            (Some(i), _) => Some(i != 0),
         }
         .map(|value| {
             (
@@ -102,13 +95,9 @@ impl<CT: CellType> OperandTypes<CT> {
     pub fn fit(&self, cell: Cell<CT>) -> BoolSet {
         self.iter().map(|op| op.fit(cell)).collect()
     }
-    pub fn try_fit_constant(
-        &self,
-        required: Option<bool>,
-        preferred: Option<bool>,
-    ) -> Option<(bool, Operand<CT>)> {
+    pub fn try_fit_constant(&self, hint: BoolHint) -> Option<(bool, Operand<CT>)> {
         self.iter()
-            .filter_map(|op| op.try_fit_constant(required, preferred))
+            .filter_map(|op| op.try_fit_constant(hint))
             .next()
     }
 }
@@ -173,7 +162,13 @@ mod tests {
                     inverted,
                     index: cell_value.map(|i| i as CellIndex),
                 };
-                let result = typ.try_fit_constant(required, preferred);
+                let hint = match (required, preferred) {
+                    (Some(required), _) => BoolHint::Require(required),
+                    (None, Some(preferred)) => BoolHint::Prefer(preferred),
+                    (None, None) => BoolHint::Any,
+                };
+                let result = typ.try_fit_constant(hint);
+                println!("{typ:#?} {hint:?} {result:?}");
                 let possible = match (required, cell_value) {
                     (Some(required), Some(cell_value)) => required == cell_value ^ inverted,
                     _ => true,

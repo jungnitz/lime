@@ -1,3 +1,4 @@
+mod boolhint;
 mod boolset;
 mod cell;
 mod func;
@@ -9,7 +10,8 @@ mod outputs;
 use std::fmt::{Display, Formatter};
 
 pub use self::{
-    boolset::BoolSet, cell::*, func::*, operand::*, operands::*, operation::*, outputs::*,
+    boolhint::BoolHint, boolset::BoolSet, cell::*, func::*, operand::*, operands::*, operation::*,
+    outputs::*,
 };
 
 /// Abstractly describes a Logic-in-Memory architecture.

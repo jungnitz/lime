@@ -48,7 +48,7 @@ where
                 .output
                 .expect("operand type should have an output if output operands are present");
             for output in self.outputs.iter() {
-                display_operand_result(f, &output, &func)?;
+                display_operand_result(f, output, &func)?;
             }
         } else {
             write!(f, ") //")?;
@@ -120,7 +120,7 @@ impl Index<usize> for InputResults {
     type Output = InputResult;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if self.len() == 0 {
+        if self.is_empty() {
             &InputResult::Unchanged
         } else if index >= self.len() {
             &self.0[self.0.len() - 1]
