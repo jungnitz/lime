@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use derive_more::{Deref, From};
+
 use crate::{BoolSet, Cell, CellIndex, CellType, display_maybe_inverted, display_opt_index};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -10,7 +12,7 @@ pub struct Operand<CT> {
 
 impl<CT> Display for Operand<CT>
 where
-    CT: Display,
+    CT: Display + CellType,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         display_maybe_inverted(f, self.inverted)?;
@@ -89,6 +91,25 @@ impl<CT: CellType> OperandType<CT> {
                 },
             )
         })
+    }
+}
+
+#[derive(Deref, From, Debug, Clone)]
+#[deref(forward)]
+pub struct OperandTypes<CT>(Vec<OperandType<CT>>);
+
+impl<CT: CellType> OperandTypes<CT> {
+    pub fn fit(&self, cell: Cell<CT>) -> BoolSet {
+        self.iter().map(|op| op.fit(cell)).collect()
+    }
+    pub fn try_fit_constant(
+        &self,
+        required: Option<bool>,
+        preferred: Option<bool>,
+    ) -> Option<(bool, Operand<CT>)> {
+        self.iter()
+            .filter_map(|op| op.try_fit_constant(required, preferred))
+            .next()
     }
 }
 

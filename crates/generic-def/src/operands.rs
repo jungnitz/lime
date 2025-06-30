@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_more::{Deref, From};
 
-use crate::{BoolSet, Cell, CellType, Function, Operand, OperandType};
+use crate::{BoolSet, Cell, CellType, Function, Operand, OperandType, OperandTypes};
 
 /// Keep track of used constants so that we do not use a constant cell twice
 #[derive(Default)]
@@ -130,7 +130,7 @@ impl<CT: CellType> TupleOperands<CT> {
 }
 
 #[derive(Debug, Clone)]
-pub struct NaryOperands<CT>(pub OperandType<CT>);
+pub struct NaryOperands<CT>(pub OperandTypes<CT>);
 
 impl<CT: CellType> NaryOperands<CT> {
     pub fn try_fit_constants_to_fn(

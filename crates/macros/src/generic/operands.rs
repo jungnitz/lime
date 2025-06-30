@@ -1,6 +1,8 @@
 use derive_more::{Deref, DerefMut};
 use itertools::Itertools;
-use lime_generic_def::{NaryOperands, OperandTuple, OperandType, Operands, TupleOperands};
+use lime_generic_def::{
+    NaryOperands, OperandTuple, OperandType, OperandTypes, Operands, TupleOperands,
+};
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use std::collections::BTreeMap;
@@ -67,9 +69,13 @@ impl NamedOperands {
                     }
                     Operands::Tuples(TupleOperands::new(vec))
                 }
-                ast::Operands::Nary(typ) => {
-                    Operands::Nary(NaryOperands(cells.new_operand_type(typ)?))
-                }
+                ast::Operands::Nary(types) => Operands::Nary(NaryOperands(
+                    types
+                        .iter()
+                        .map(|typ| cells.new_operand_type(typ))
+                        .collect::<Result<Vec<_>>>()?
+                        .into(),
+                )),
             };
             if result.insert(name.to_string(), operands).is_some() {
                 return Err(Error::new(name.span(), "duplicate operands name"));
@@ -102,12 +108,26 @@ impl ToTokens for OperandsValue<'_> {
     }
 }
 
+struct OperandTypesValue<'a>(&'a OperandTypes<CellType>);
+
+impl ToTokens for OperandTypesValue<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let krate = krate();
+        let types = self.0.iter().map(OperandTypeValue);
+        tokens.extend(quote! {
+            #krate::OperandTypes::from(vec![
+                #(#types),*
+            ])
+        });
+    }
+}
+
 struct NaryOperandsValue<'a>(&'a NaryOperands<CellType>);
 
 impl ToTokens for NaryOperandsValue<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let krate = krate();
-        let inner = OperandTypeValue(&self.0.0);
+        let inner = OperandTypesValue(&self.0.0);
         tokens.extend(quote!(#krate::NaryOperands(#inner)));
     }
 }

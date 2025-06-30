@@ -107,7 +107,7 @@ impl Parse for NameAndOperands {
 
 #[derive(Debug)]
 pub enum Operands {
-    Nary(OperandType),
+    Nary(Punctuated<OperandType, Token![|]>),
     Tuples(Punctuated<OperandTuplesElement, Token![,]>),
 }
 
@@ -118,7 +118,7 @@ impl Parse for Operands {
         if inner.peek(Paren) || inner.peek(Token![...]) {
             Ok(Self::Tuples(Punctuated::parse_terminated(&inner)?))
         } else {
-            Ok(Self::Nary(inner.parse()?))
+            Ok(Self::Nary(Punctuated::parse_terminated(&inner)?))
         }
     }
 }

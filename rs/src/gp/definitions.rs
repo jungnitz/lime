@@ -63,10 +63,10 @@ define_generic_architecture! {
         cells([D]),
         operands (
             ANY = [(D)],
-            NARY = [D],
-            NOT_NARY = [!D],
-            TERNARY = [(D, D, D)],
-            BINARY = [(D, D)]
+            NARY = [D | bool],
+            NOT_NARY = [!D | !bool],
+            TERNARY = [(D, D, D), (bool, D, D), (bool, bool, D), (bool, bool, bool)],
+            BINARY = [(D, D), (bool, D), (bool, bool)]
         ),
         operations (
             // or

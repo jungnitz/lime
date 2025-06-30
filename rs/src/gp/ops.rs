@@ -1,8 +1,11 @@
+use std::fmt::Display;
+
+use itertools::Itertools;
 use lime_generic_def::{Architecture, BoolSet, Cell, CellType, Operand, Operation};
 
-use crate::gp::{Ambit, AmbitCellType};
+use crate::gp::{Ambit, AmbitCellType, FELIXCellType, FELIX};
 
-pub fn set<CT: CellType>(
+pub fn set<CT: CellType + Display>(
     arch: &Architecture<CT>,
     cell: Cell<CT>,
     value: bool,
@@ -52,14 +55,14 @@ pub fn set<CT: CellType>(
         //     }
         // }
     }
-    println!("{operations:#?}");
+    println!("{}", operations.iter().format("\n"));
     operations
 }
 
 #[test]
 fn test() {
-    let ambit = Ambit::new();
-    set(&ambit, Cell::new(AmbitCellType::DCC, 0), false);
+    let ambit = FELIX::new();
+    set(&ambit, Cell::new(FELIXCellType::D, 0), true);
 }
 
 // pub fn copy<A: Architecture>(arch: &A, from: A::Cell, to: A::Cell, invert: bool) {
@@ -73,9 +76,9 @@ fn test() {
 //
 // pub fn copy_using_cross<A: Architecture>(
 //     arch: &A,
-//     from: A::Cell,
+//     from: A::Cell,asd
 //     to: A::Cell,
-//     invert: bool,
+//     invert: bool,asdfasdfasdf
 //     operation: &OperationType<A>,
 //     cross: &OperandCross<A>,
 // ) {
