@@ -4,6 +4,37 @@ use derive_more::{Deref, From};
 
 use crate::{BoolSet, Cell, CellType, Function, Operand, OperandType};
 
+/// Keep track of used constants so that we do not use a constant cell twice
+#[derive(Default)]
+struct ConstantUse(BoolSet);
+
+impl ConstantUse {
+    pub fn map_req_pref<CT: CellType>(
+        &self,
+        op: &OperandType<CT>,
+        required: Option<bool>,
+        preferred: Option<bool>,
+    ) -> Option<(Option<bool>, Option<bool>)> {
+        let use_required = match self.0 {
+            BoolSet::Single(cell_value) => Some(!cell_value ^ op.inverted),
+            BoolSet::None => None,
+            BoolSet::All => return None,
+        };
+        if let Some(required) = required
+            && let Some(use_required) = use_required
+            && required != use_required
+        {
+            return None;
+        }
+        Some((use_required, use_required.or(preferred)))
+    }
+    pub fn add_op<CT: CellType>(&mut self, op: &Operand<CT>) {
+        self.0 = self
+            .0
+            .insert(op.cell.constant_value().expect("should be a constant"));
+    }
+}
+
 #[derive(Deref, From, Debug, Clone)]
 #[deref(forward)]
 pub struct OperandTuple<CT>(Vec<OperandType<CT>>);
@@ -20,15 +51,23 @@ impl<CT: CellType> OperandTuple<CT> {
         function: Function,
         value: bool,
     ) -> Option<Vec<Operand<CT>>> {
+        let mut used = ConstantUse::default();
         function.try_compute(value, Some(self.len()), |i, required, preferred| {
-            self[i].try_fit_constant(required, preferred)
+            let op = &self[i];
+            let (required, preferred) = used.map_req_pref(op, required, preferred)?;
+            let (value, operand) = op.try_fit_constant(required, preferred)?;
+            used.add_op(&operand);
+            Some((value, operand))
         })
     }
     pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
         let mut result = Vec::with_capacity(self.len());
         let mut eval = function.evaluate();
+        let mut used = ConstantUse::default();
         for typ in self.iter() {
-            let (value, op) = typ.try_fit_constant(None, None)?;
+            let (required, preferred) = used.map_req_pref(typ, None, None)?;
+            let (value, op) = typ.try_fit_constant(required, preferred)?;
+            used.add_op(&op);
             result.push(op);
             eval.add(value);
         }

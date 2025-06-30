@@ -1,7 +1,8 @@
 /// A set of booleans, i.e. either `{}`, `{true}`, `{false}` or `{true, false}`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum BoolSet {
     /// `{}`
+    #[default]
     None,
     /// `{<value>}`
     Single(bool),
