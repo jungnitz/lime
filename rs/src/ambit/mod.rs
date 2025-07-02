@@ -11,7 +11,7 @@ use self::compilation::compile;
 use self::extraction::CompilingCostFunction;
 
 use crate::opt_extractor::{OptExtractionNetwork, OptExtractor};
-use eggmock::egg::{rewrite, EGraph, Rewrite, Runner};
+use eggmock::egg::{EGraph, Rewrite, Runner, rewrite};
 use eggmock::{Mig, MigLanguage, MigReceiverFFI, Network, Receiver, ReceiverFFI};
 use program::*;
 use rows::*;
@@ -218,7 +218,7 @@ struct CompilerStatistics {
     t_compiler: u64,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn ambit_rewrite_ffi(
     settings: CompilerSettings,
     receiver: MigReceiverFFI<()>,
@@ -231,7 +231,7 @@ extern "C" fn ambit_rewrite_ffi(
     MigReceiverFFI::new(receiver)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn ambit_compile_ffi(settings: CompilerSettings) -> MigReceiverFFI<CompilerStatistics> {
     let receiver = compiling_receiver(&ARCHITECTURE, REWRITE_RULES.as_slice(), settings)
         .map(CompilerStatistics::from_result);

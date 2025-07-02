@@ -58,7 +58,7 @@ impl Instruction {
     pub fn used_addresses<'a>(
         &self,
         architecture: &'a Architecture,
-    ) -> impl Iterator<Item = SingleRowAddress> + 'a {
+    ) -> impl Iterator<Item = SingleRowAddress> + 'a + use<'a> {
         let from = match self {
             Instruction::AAP(from, _) => from,
             Instruction::AP(op) => op,
@@ -251,7 +251,7 @@ impl Address {
     pub fn row_addresses<'a>(
         &self,
         architecture: &'a Architecture,
-    ) -> impl Iterator<Item = SingleRowAddress> + 'a {
+    ) -> impl Iterator<Item = SingleRowAddress> + use<'a> {
         let single = self.as_single_row().into_iter();
         let multi = match self {
             Address::Bitwise(BitwiseAddress::Multiple(i)) => {
