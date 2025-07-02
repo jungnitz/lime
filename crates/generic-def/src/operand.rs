@@ -42,12 +42,12 @@ where
 
 impl<CT: CellType> OperandType<CT> {
     /// Checks whether the given `cell` can be used for an operand of this type. If it can, returns
-    /// whether the operand must/can reference the inverted cell value.
-    pub fn fit(&self, cell: Cell<CT>) -> BoolSet {
+    /// whether the operand must reference the inverted cell value.
+    pub fn fit(&self, cell: Cell<CT>) -> Option<bool> {
         if self.typ == cell.typ() && self.index.is_none_or(|i| i == cell.index()) {
-            BoolSet::from(self.inverted)
+            Some(self.inverted)
         } else {
-            BoolSet::None
+            None
         }
     }
 
@@ -119,7 +119,7 @@ mod tests {
                 index: Some(10),
             }
             .fit(Cell::new(DummyCellType::B, 10)),
-            BoolSet::Single(true)
+            Some(true)
         );
         assert_eq!(
             OperandType {
@@ -128,7 +128,7 @@ mod tests {
                 index: Some(1),
             }
             .fit(Cell::new(DummyCellType::A, 1)),
-            BoolSet::Single(false)
+            Some(false)
         );
         assert_eq!(
             OperandType {
@@ -137,7 +137,7 @@ mod tests {
                 index: Some(0),
             }
             .fit(Cell::new(DummyCellType::B, 1)),
-            BoolSet::None
+            None
         );
         assert_eq!(
             OperandType {
@@ -146,7 +146,7 @@ mod tests {
                 index: Some(0),
             }
             .fit(Cell::new(DummyCellType::B, 0)),
-            BoolSet::None
+            None
         );
     }
 
@@ -184,7 +184,8 @@ mod tests {
                         "value is not the required value"
                     );
                     assert!(
-                        typ.fit(operand.cell).contains(operand.inverted),
+                        typ.fit(operand.cell)
+                            .is_none_or(|inverted| inverted == operand.inverted),
                         "returned operand does not fit operand type"
                     );
                     if let (None, Some(preferred)) = (required, preferred) {

@@ -1,35 +1,9 @@
-use std::sync::Arc;
+use std::{slice, sync::Arc};
 
 use derive_more::{Deref, From};
+use itertools::Either;
 
-use crate::{BoolHint, BoolSet, Cell, CellType, Function, Operand, OperandType, OperandTypes};
-
-/// Keep track of used constants so that we do not use a constant cell twice
-#[derive(Default)]
-struct ConstantUse(BoolSet);
-
-impl ConstantUse {
-    pub fn map_hint<CT: CellType>(&self, op: &OperandType<CT>, hint: BoolHint) -> Option<BoolHint> {
-        // required value from previous uses
-        let use_required = match self.0 {
-            BoolSet::Single(cell_value) => Some(!cell_value ^ op.inverted),
-            BoolSet::None => None,
-            BoolSet::All => return None,
-        };
-        if let BoolHint::Require(required) = hint
-            && let Some(use_required) = use_required
-            && required != use_required
-        {
-            return None;
-        }
-        Some(use_required.map(BoolHint::Require).unwrap_or(hint))
-    }
-    pub fn add_op<CT: CellType>(&mut self, op: &Operand<CT>) {
-        self.0 = self
-            .0
-            .insert(op.cell.constant_value().expect("should be a constant"));
-    }
-}
+use crate::{BoolSet, Cell, CellType, OperandType, OperandTypes};
 
 #[derive(Deref, From, Debug, Clone)]
 #[deref(forward)]
@@ -39,35 +13,8 @@ impl<CT> OperandTuple<CT> {
     pub fn new(operands: Vec<OperandType<CT>>) -> Self {
         Self(operands)
     }
-}
-
-impl<CT: CellType> OperandTuple<CT> {
-    pub fn try_fit_constants_to_fn(
-        &self,
-        function: Function,
-        value: bool,
-    ) -> Option<Vec<Operand<CT>>> {
-        let mut used = ConstantUse::default();
-        function.try_compute(value, Some(self.len()), |i, hint| {
-            let op = &self[i];
-            let hint = used.map_hint(op, hint)?;
-            let (value, operand) = op.try_fit_constant(hint)?;
-            used.add_op(&operand);
-            Some((value, operand))
-        })
-    }
-    pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
-        let mut result = Vec::with_capacity(self.len());
-        let mut eval = function.evaluate();
-        let mut used = ConstantUse::default();
-        for typ in self.iter() {
-            let hint = used.map_hint(typ, BoolHint::Any)?;
-            let (value, op) = typ.try_fit_constant(hint)?;
-            used.add_op(&op);
-            result.push(op);
-            eval.add(value);
-        }
-        eval.evaluate().map(|value| (value, result))
+    pub fn as_slice(&self) -> &[OperandType<CT>] {
+        self.0.as_slice()
     }
 }
 
@@ -107,51 +54,10 @@ impl<CT: CellType> TupleOperands<CT> {
             .map(|set| set[0].fit(cell))
             .collect()
     }
-    pub fn try_fit_constants_to_fn(
-        &self,
-        function: Function,
-        value: bool,
-    ) -> Option<Vec<Operand<CT>>> {
-        self.tuples
-            .iter()
-            .filter_map(|tuple| tuple.try_fit_constants_to_fn(function, value))
-            .next()
-    }
-    pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
-        self.tuples
-            .iter()
-            .filter_map(|tuple| tuple.try_fit_constants(function))
-            .next()
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct NaryOperands<CT>(pub OperandTypes<CT>);
-
-impl<CT: CellType> NaryOperands<CT> {
-    pub fn try_fit_constants_to_fn(
-        &self,
-        function: Function,
-        value: bool,
-    ) -> Option<Vec<Operand<CT>>> {
-        function.try_compute(value, None, |_, hint| {
-            let hint = match hint {
-                BoolHint::Prefer(v) => BoolHint::Require(v),
-                _ => hint,
-            };
-            self.0.try_fit_constant(hint)
-        })
-    }
-    pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
-        self.0
-            .try_fit_constant(BoolHint::Any)
-            .and_then(|(value, op)| {
-                let mut eval = function.evaluate();
-                eval.add(value);
-                eval.evaluate().map(|value| (value, vec![op]))
-            })
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum Operands<CT> {
@@ -170,36 +76,21 @@ impl<CT> Operands<CT> {
 }
 
 impl<CT: CellType> Operands<CT> {
+    /// Returns all combinations of operands that fit this description. For descriptions of n-ary
+    /// operands returns only a minimal set of combinations (i.e. slices of length 1).
+    pub fn combinations(&self) -> impl Iterator<Item = &[OperandType<CT>]> {
+        match self {
+            Self::Tuples(tuples) => Either::Left(tuples.iter().map(|tuple| tuple.as_slice())),
+            Self::Nary(nary) => Either::Right(nary.0.iter().map(|typ| slice::from_ref(typ))),
+        }
+    }
+
     /// Returns the inverted-values for which using **only** the given cell for the described
     /// operands described is valid
     pub fn fit_cell(&self, cell: Cell<CT>) -> BoolSet {
         match self {
             Self::Tuples(tuples) => tuples.fit(cell),
             Self::Nary(typ) => typ.0.fit(cell),
-        }
-    }
-
-    /// Attempt to use only constants for the described operands and so that the result of the given
-    /// function with the selected operands is the target `value`.
-    /// Returns the matched operands on success, or `None` if not possible.
-    pub fn try_fit_constants_to_fn(
-        &self,
-        function: Function,
-        value: bool,
-    ) -> Option<Vec<Operand<CT>>> {
-        match self {
-            Self::Nary(typ) => typ.try_fit_constants_to_fn(function, value),
-            Self::Tuples(tuples) => tuples.try_fit_constants_to_fn(function, value),
-        }
-    }
-
-    /// Attempt to use only constants for the described operands.
-    /// Returns the value of the given function and the selected operands on success or `None` if
-    /// not possible.
-    pub fn try_fit_constants(&self, function: Function) -> Option<(bool, Vec<Operand<CT>>)> {
-        match self {
-            Self::Nary(nary) => nary.try_fit_constants(function),
-            Self::Tuples(tuples) => tuples.try_fit_constants(function),
         }
     }
 }

@@ -49,11 +49,11 @@ define_generic_architecture! {
         operands (
             TRIPLET = [
                 (D, !D, D),
-                (bool, bool, D)
+                (bool, !bool, D)
             ]
         ),
         operations (
-            RMA3 = (TRIPLET := (_, _, maj) -> maj)
+            RMA3 = (TRIPLET := (_, _, maj))
         )
     }
 }

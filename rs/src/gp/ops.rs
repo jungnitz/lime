@@ -1,59 +1,18 @@
+mod constant;
+
 use std::fmt::Display;
 
 use itertools::Itertools;
-use lime_generic_def::{Architecture, BoolSet, Cell, CellType, Operand, Operation};
+use lime_generic_def::Cell;
 
-use crate::gp::{Ambit, AmbitCellType, FELIXCellType, FELIX};
-
-pub fn set<CT: CellType + Display>(
-    arch: &Architecture<CT>,
-    cell: Cell<CT>,
-    value: bool,
-) -> Vec<Operation<CT>> {
-    let mut operations = Vec::new();
-    for operation in arch.operations().iter() {
-        // Option 1: use output
-        'opt1: {
-            if let Some(output) = operation.output {
-                if operation.input_results.unchanged() {
-                    let (inputs, inverted) = match arch.outputs().fit_cell(cell) {
-                        BoolSet::None => break 'opt1,
-                        BoolSet::All => {
-                            let Some((fn_value, ops)) = operation.input.try_fit_constants(output)
-                            else {
-                                break 'opt1;
-                            };
-                            (ops, fn_value != value)
-                        }
-                        BoolSet::Single(inverted) => {
-                            let Some(ops) = operation
-                                .input
-                                .try_fit_constants_to_fn(output, value ^ inverted)
-                            else {
-                                break 'opt1;
-                            };
-                            (ops, inverted)
-                        }
-                    };
-                    operations.push(Operation {
-                        typ: operation.clone(),
-                        inputs,
-                        outputs: vec![Operand { cell, inverted }],
-                    });
-                }
-            }
-        }
-
-        // Option 2: use overridden input value
-    }
-    println!("{}", operations.iter().format("\n"));
-    operations
-}
+use crate::gp::{
+    Ambit, AmbitCellType, FELIX, FELIXCellType, IMPLY, IMPLYCellType, ops::constant::set,
+};
 
 #[test]
 fn test() {
-    let ambit = FELIX::new();
-    set(&ambit, Cell::new(FELIXCellType::D, 0), true);
+    let ambit = IMPLY::new();
+    set(&ambit, Cell::new(IMPLYCellType::D, 1), false);
 }
 
 // pub fn copy<A: Architecture>(arch: &A, from: A::Cell, to: A::Cell, invert: bool) {

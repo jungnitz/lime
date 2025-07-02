@@ -55,6 +55,16 @@ impl FromIterator<BoolSet> for BoolSet {
     }
 }
 
+impl<I: Into<Option<bool>>> FromIterator<I> for BoolSet {
+    fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
+        let mut r = BoolSet::None;
+        for val in iter {
+            r = r.insert_optional(val.into());
+        }
+        r
+    }
+}
+
 impl From<bool> for BoolSet {
     fn from(value: bool) -> Self {
         Self::Single(value)
