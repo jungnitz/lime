@@ -19,8 +19,8 @@ define_generic_architecture! {
             ],
         ),
         operations (
-            TRA = (TRA := maj -> maj),
-            RC = (ANY_AND_CONST -> and)
+            TRA = ([*] := maj(TRA)),
+            RC = (and(ANY_AND_CONST))
         ),
         output (TRA, DRA, ANY, NONE)
     }
@@ -37,8 +37,8 @@ define_generic_architecture! {
             ANY = [(D)]
         ),
         operations (
-            IMP = (PAIR := (_, and)),
-            FALSE = (ANY := false)
+            IMP = ([1] := and(PAIR)),
+            FALSE = ([0] := false(ANY))
         )
     }
 }
@@ -49,11 +49,13 @@ define_generic_architecture! {
         operands (
             TRIPLET = [
                 (D, !D, D),
+                (bool, !D, D),
+                (D, !bool, D),
                 (bool, !bool, D)
             ]
         ),
         operations (
-            RMA3 = (TRIPLET := (_, _, maj))
+            RMA3 = ([2] := maj(TRIPLET))
         )
     }
 }
@@ -70,13 +72,13 @@ define_generic_architecture! {
         ),
         operations (
             // or
-            OR = (NOT_NARY -> !and),
+            OR = (!and(NOT_NARY)),
             // nor
-            NOR = (NOT_NARY -> and),
+            NOR = (and(NOT_NARY)),
 
-            NAND2 = (BINARY -> !and),
-            NAND3 = (TERNARY -> !and),
-            MIN = (TERNARY -> !maj),
+            NAND2 = (!and(BINARY)),
+            NAND3 = (!and(TERNARY)),
+            MIN = (!maj(TERNARY)),
         ),
         output (ANY)
     }

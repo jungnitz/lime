@@ -58,7 +58,7 @@ fn display_opt_index<D: Display>(f: &mut Formatter<'_>, idx: Option<D>) -> std::
 mod tests {
     use super::*;
 
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub enum DummyCellType {
         Constant,
         A,

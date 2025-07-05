@@ -6,7 +6,7 @@ use crate::{
     BoolHint, BoolSet, Cell, CellIndex, CellType, display_maybe_inverted, display_opt_index,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Operand<CT> {
     pub cell: Cell<CT>,
     pub inverted: bool,
@@ -22,7 +22,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OperandType<CT> {
     pub typ: CT,
     pub inverted: bool,

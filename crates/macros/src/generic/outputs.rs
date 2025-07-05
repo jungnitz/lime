@@ -13,7 +13,7 @@ impl Outputs {
             .inner
             .output
             .iter()
-            .flat_map(|outputs| outputs.elements.iter())
+            .flat_map(|outputs| outputs.value.iter())
             .map(|output| operands.by_ident(output))
             .try_collect()?;
         Ok(Self(def::Outputs::new(outputs)))

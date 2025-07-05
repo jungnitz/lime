@@ -6,6 +6,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Error, Ident, Result};
 
+use crate::generic::ast::Bracketed;
+
 use super::{ast, ast::BoolOrIdent, krate};
 
 #[derive(Deref)]
@@ -19,7 +21,7 @@ impl Cells {
     pub fn from_ast(ast: Rc<ast::Architecture>) -> Result<Self> {
         let tuple = &ast.inner.cells;
         let mut entries = BTreeMap::new();
-        for def in &tuple.elements {
+        for def in tuple.value.iter() {
             let prev = entries.insert(
                 def.name.to_string(),
                 def.num.as_ref().map(|lit| lit.base10_parse()).transpose()?,
@@ -34,7 +36,7 @@ impl Cells {
     pub fn new_operand_type(&self, ast: &ast::OperandType) -> Result<OperandType<CellType>> {
         let (typ, index) = match &ast.name {
             BoolOrIdent::Bool(lit) => {
-                if let Some((bracket, _)) = ast.index {
+                if let Some(Bracketed { bracket, .. }) = ast.index.0 {
                     return Err(Error::new(
                         bracket.span.join(),
                         "cannot index constant value",
@@ -58,19 +60,25 @@ impl Cells {
                 };
                 let index = ast
                     .index
+                    .0
                     .as_ref()
-                    .map(|(_, index_lit)| -> Result<CellIndex> {
-                        let index = index_lit.base10_parse()?;
-                        if let Some(count) = arity
-                            && index >= count
-                        {
-                            return Err(Error::new(
-                                index_lit.span(),
-                                "cell index out of bounds for this type",
-                            ));
-                        }
-                        Ok(index)
-                    })
+                    .map(
+                        |Bracketed {
+                             value: index_lit, ..
+                         }|
+                         -> Result<CellIndex> {
+                            let index = index_lit.base10_parse()?;
+                            if let Some(count) = arity
+                                && index >= count
+                            {
+                                return Err(Error::new(
+                                    index_lit.span(),
+                                    "cell index out of bounds for this type",
+                                ));
+                            }
+                            Ok(index)
+                        },
+                    )
                     .transpose()?;
                 (typ, index)
             }
@@ -99,7 +107,7 @@ impl ToTokens for Cells {
         let vis = &self.ast.vis;
         let krate = krate();
         tokens.extend(quote! {
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
             #vis enum #name {
                 Constant,
                 #(#name_idents),*

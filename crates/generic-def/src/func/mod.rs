@@ -128,6 +128,7 @@ impl Display for Function {
 
 trait EvaluationMethods {
     fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
+    fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint>;
     fn add(&mut self, value: bool);
     fn evaluate(&self) -> Option<bool>;
 }
@@ -140,6 +141,9 @@ pub struct FunctionEvaluation {
 impl FunctionEvaluation {
     pub fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint> {
         self.gate.hint(arity, target ^ self.inverted)
+    }
+    pub fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint> {
+        self.gate.hint_to_ident(arity, inverted ^ self.inverted)
     }
     pub fn add(&mut self, value: bool) {
         self.gate.add(value);
@@ -163,6 +167,7 @@ impl GateEvaluation {
             Self::Const(c) => c,
         } {
             fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
+            fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint>;
             fn add(&mut self, value: bool);
             fn evaluate(&self) -> Option<bool>;
         }

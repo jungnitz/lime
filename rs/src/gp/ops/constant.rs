@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 use lime_generic_def::{
-    Architecture, BoolHint, BoolSet, Cell, CellType, Function, FunctionEvaluation, InputResult,
+    Architecture, BoolHint, BoolSet, Cell, CellType, Function, FunctionEvaluation, InputIndices,
     Operand, OperandType, Operation, OperationType, Outputs,
 };
 
@@ -30,13 +30,11 @@ fn set_using_operation<CT: CellType>(
     cell: Cell<CT>,
     value: bool,
 ) {
-    if let Some(output) = operation.output
-        && operation.input_results.unchanged()
-    {
-        set_using_output(arch, operations, operation, cell, value, output);
+    if operation.input_override.is_none() {
+        set_using_output(arch, operations, operation, cell, value);
     }
 
-    if operation.output.is_none() {
+    if arch.outputs().contains_none() {
         set_using_input_result(arch, operations, operation, cell, value);
     }
 }
@@ -47,7 +45,6 @@ fn set_using_output<CT: CellType>(
     typ: &OperationType<CT>,
     cell: Cell<CT>,
     value: bool,
-    output: Function,
 ) {
     let inverted = match arch.outputs().fit_cell(cell) {
         BoolSet::None => return,
@@ -56,7 +53,7 @@ fn set_using_output<CT: CellType>(
     };
     let target = inverted.map(|inverted| value ^ inverted);
     'combinations: for combination in typ.input.combinations() {
-        let mut map = ConstantMapping::new(output, combination.len(), target);
+        let mut map = ConstantMapping::new(typ.function, combination.len(), target);
         for operand in combination {
             if map.match_next(operand).is_none() {
                 continue 'combinations;
@@ -89,41 +86,38 @@ fn set_using_input_result<CT: CellType>(
     cell: Cell<CT>,
     value: bool,
 ) {
-    for combination in operation.input.combinations() {
-        'target: for (target_idx, typ) in combination.iter().enumerate() {
-            let inverted = match typ.fit(cell) {
-                None => continue,
-                Some(inverted) => inverted,
-            };
-            let mut target_func = match operation.input_results[target_idx] {
-                InputResult::Function(func) => func,
-                _ => continue,
-            };
-            target_func.inverted ^= inverted;
-            let mut mapping = ConstantMapping::new(target_func, combination.len(), Some(value));
-            for (i, operand) in combination.iter().enumerate() {
-                if i == target_idx {
-                    continue;
-                }
-                if operation.input_results[i] != InputResult::Unchanged
-                    || mapping.match_next(operand).is_none()
-                {
-                    continue 'target;
-                }
+    let Some(InputIndices::Index(target_idx)) = operation.input_override else {
+        return;
+    };
+    'combinations: for combination in operation.input.combinations() {
+        let typ = combination[target_idx];
+        let inverted = match typ.fit(cell) {
+            None => continue,
+            Some(inverted) => inverted,
+        };
+        let mut target_func = operation.function;
+        target_func.inverted ^= inverted;
+        let mut mapping = ConstantMapping::new(target_func, combination.len(), Some(value));
+        for (i, operand) in combination.iter().enumerate() {
+            if i == target_idx {
+                continue;
             }
-            match mapping.eval.hint(Some(combination.len()), value) {
-                None | Some(BoolHint::Require(_)) => continue,
-                _ => {}
+            if mapping.match_next(operand).is_none() {
+                continue 'combinations;
             }
-            mapping
-                .inputs
-                .insert(target_idx, Operand { cell, inverted });
-            operations.push(Operation {
-                typ: operation.clone(),
-                inputs: mapping.inputs,
-                outputs: vec![],
-            });
         }
+        match mapping.eval.hint(Some(combination.len()), value) {
+            None | Some(BoolHint::Require(_)) => continue,
+            _ => {}
+        }
+        mapping
+            .inputs
+            .insert(target_idx, Operand { cell, inverted });
+        operations.push(Operation {
+            typ: operation.clone(),
+            inputs: mapping.inputs,
+            outputs: vec![],
+        });
     }
 }
 

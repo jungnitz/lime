@@ -20,7 +20,7 @@ pub struct NamedOperands(pub BTreeMap<String, Operands<CellType>>);
 impl NamedOperands {
     pub fn new(cells: &Cells, ast: &ast::Architecture) -> Result<Self> {
         let mut result = BTreeMap::new();
-        for NameAndOperands { name, operands, .. } in &ast.inner.operands.elements {
+        for NameAndOperands { name, operands, .. } in ast.inner.operands.value.iter() {
             let operands = match operands {
                 ast::Operands::Tuples(tuples) => {
                     let mut vec = Vec::new();
@@ -29,17 +29,17 @@ impl NamedOperands {
                         match element {
                             OperandTuplesElement::Tuple(tuple) => {
                                 if let Some(arity) = arity
-                                    && tuple.elements.len() != arity
+                                    && tuple.value.len() != arity
                                 {
                                     return Err(Error::new(
                                         tuple.paren.span.join(),
                                         "tuple does not match arity with previous tuples",
                                     ));
                                 }
-                                arity = Some(tuple.elements.len());
+                                arity = Some(tuple.value.len());
                                 vec.push(OperandTuple::new(
                                     tuple
-                                        .elements
+                                        .value
                                         .iter()
                                         .map(|typ| cells.new_operand_type(typ))
                                         .try_collect()?,

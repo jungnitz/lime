@@ -81,7 +81,7 @@ impl<CT: CellType> Operands<CT> {
     pub fn combinations(&self) -> impl Iterator<Item = &[OperandType<CT>]> {
         match self {
             Self::Tuples(tuples) => Either::Left(tuples.iter().map(|tuple| tuple.as_slice())),
-            Self::Nary(nary) => Either::Right(nary.0.iter().map(|typ| slice::from_ref(typ))),
+            Self::Nary(nary) => Either::Right(nary.0.iter().map(slice::from_ref)),
         }
     }
 

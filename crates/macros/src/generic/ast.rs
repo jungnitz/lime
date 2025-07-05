@@ -1,8 +1,9 @@
+use derive_more::{Deref, DerefMut};
 use syn::{
     Error, Ident, LitBool, LitInt, Result, Token, Visibility, braced, bracketed, parenthesized,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    token::{Brace, Bracket, Comma, Paren},
+    token::{Brace, Bracket, Paren},
 };
 
 #[derive(Debug)]
@@ -140,47 +141,21 @@ impl Parse for OperandTuplesElement {
     }
 }
 
-#[derive(Debug)]
-pub struct Tuple<T> {
-    pub paren: Paren,
-    pub elements: Punctuated<T, Comma>,
-}
-
-impl<T> Parse for Tuple<T>
-where
-    T: Parse,
-{
-    fn parse(input: ParseStream) -> Result<Self> {
-        let inner;
-        Ok(Self {
-            paren: parenthesized!(inner in input),
-            elements: Punctuated::parse_terminated(&inner)?,
-        })
-    }
-}
+pub type Tuple<T> = Parenthesized<ParsePunctuated<T, Token![,]>>;
 
 #[derive(Debug)]
 pub struct OperandType {
     pub invert: Option<Token![!]>,
     pub name: BoolOrIdent,
-    pub index: Option<(Bracket, LitInt)>,
+    pub index: MaybeBracketed<LitInt>,
 }
 
 impl Parse for OperandType {
     fn parse(input: ParseStream) -> Result<Self> {
-        let invert = input.parse()?;
-        let name = input.parse()?;
-        let index = if input.peek(Bracket) {
-            let inner;
-            let bracket = bracketed!(inner in input);
-            Some((bracket, inner.parse()?))
-        } else {
-            None
-        };
         Ok(Self {
-            invert,
-            name,
-            index,
+            invert: input.parse()?,
+            name: input.parse()?,
+            index: input.parse()?,
         })
     }
 }
@@ -192,63 +167,30 @@ pub struct Operation {
     pub eq: Token![=],
     #[expect(unused)]
     pub paren: Paren,
-    pub input: Ident,
-    pub input_results: Option<InputResults>,
-    pub output_function: Option<Function>,
+    pub input_target_idx: MaybeBracketed<IntOrStar>,
+    pub function: Function,
+    pub input: Parenthesized<Ident>,
 }
 
 impl Parse for Operation {
     fn parse(input: ParseStream) -> Result<Self> {
         let inner;
+        let name = input.parse()?;
+        let eq = input.parse()?;
+        let paren = parenthesized!(inner in input);
+        let input_result_idx: MaybeBracketed<IntOrStar> = inner.parse()?;
+        if input_result_idx.0.is_some() {
+            inner.parse::<Token![:]>()?;
+            inner.parse::<Token![=]>()?;
+        }
         Ok(Self {
-            name: input.parse()?,
-            eq: input.parse()?,
-            paren: parenthesized!(inner in input),
+            name,
+            eq,
+            paren,
+            input_target_idx: input_result_idx,
+            function: inner.parse()?,
             input: inner.parse()?,
-            input_results: inner
-                .parse::<Option<Token![:]>>()?
-                .map(|_| {
-                    inner.parse::<Option<Token![=]>>()?;
-                    inner.parse()
-                })
-                .transpose()?,
-            output_function: inner
-                .parse::<Option<Token![->]>>()?
-                .map(|_| inner.parse())
-                .transpose()?,
         })
-    }
-}
-
-#[derive(Debug)]
-pub enum InputResults {
-    All(InputResult),
-    Tuple(Tuple<InputResult>),
-}
-
-impl Parse for InputResults {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(Paren) {
-            Ok(Self::Tuple(input.parse()?))
-        } else {
-            Ok(Self::All(input.parse()?))
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum InputResult {
-    Unchanged(Token![_]),
-    Function(Function),
-}
-
-impl Parse for InputResult {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(Token![_]) {
-            Ok(Self::Unchanged(input.parse()?))
-        } else {
-            Ok(Self::Function(input.parse()?))
-        }
     }
 }
 
@@ -279,6 +221,92 @@ impl Parse for BoolOrIdent {
             Ok(Self::Bool(input.parse()?))
         } else {
             Ok(Self::Ident(input.parse()?))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Bracketed<T> {
+    pub bracket: Bracket,
+    pub value: T,
+}
+
+impl<T> Parse for Bracketed<T>
+where
+    T: Parse,
+{
+    fn parse(input: ParseStream) -> Result<Self> {
+        let inner;
+        Ok(Self {
+            bracket: bracketed!(inner in input),
+            value: inner.parse()?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct MaybeBracketed<T>(pub Option<Bracketed<T>>);
+
+impl<T> Parse for MaybeBracketed<T>
+where
+    T: Parse,
+{
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(Self(if input.peek(Bracket) {
+            Some(input.parse()?)
+        } else {
+            None
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct Parenthesized<T> {
+    pub paren: Paren,
+    pub value: T,
+}
+
+impl<T> Parse for Parenthesized<T>
+where
+    T: Parse,
+{
+    fn parse(input: ParseStream) -> Result<Self> {
+        let inner;
+        Ok(Self {
+            paren: parenthesized!(inner in input),
+            value: inner.parse()?,
+        })
+    }
+}
+
+#[derive(Debug, Deref, DerefMut)]
+pub struct ParsePunctuated<T, P>(Punctuated<T, P>);
+
+impl<T, P> Parse for ParsePunctuated<T, P>
+where
+    T: Parse,
+    P: Parse,
+{
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(Self(Punctuated::parse_terminated(input)?))
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum IntOrStar {
+    Int(LitInt),
+    Star(Token![*]),
+}
+
+impl Parse for IntOrStar {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if let Ok(int) = input.parse() {
+            Ok(Self::Int(int))
+        } else if let Ok(star) = input.parse() {
+            Ok(Self::Star(star))
+        } else {
+            Err(Error::new(input.span(), "expected '*' or integer literal"))
         }
     }
 }

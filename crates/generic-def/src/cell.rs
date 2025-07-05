@@ -5,7 +5,7 @@ use crate::display_index;
 
 pub type CellIndex = u32;
 
-pub trait CellType: Copy + Debug + PartialEq + Eq + Hash {
+pub trait CellType: Copy + Debug + PartialEq + Eq + Hash + PartialOrd + Ord {
     /// The type of the constant (pseudo-)cell. This cell type has 2 cells where the cell index
     /// is equivalent to the cell value (i.e. `0` is `false` and `1` is true)
     const CONSTANT: Self;
@@ -18,7 +18,7 @@ pub trait CellType: Copy + Debug + PartialEq + Eq + Hash {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Cell<CT>(CT, CellIndex);
 
 impl<CT: CellType> Cell<CT> {

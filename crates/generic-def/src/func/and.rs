@@ -39,6 +39,23 @@ impl EvaluationMethods for AndEval {
         }
     }
 
+    fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint> {
+        if inverted {
+            return None;
+        }
+        if let Some(arity) = arity {
+            if self.count + 1 == arity as u8 {
+                Some(BoolHint::Any)
+            } else {
+                Some(BoolHint::Require(true))
+            }
+        } else if self.value {
+            Some(BoolHint::Any)
+        } else {
+            None
+        }
+    }
+
     fn add(&mut self, value: bool) {
         self.count += 1;
         self.value &= value;

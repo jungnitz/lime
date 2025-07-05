@@ -3,10 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use itertools::Itertools;
-use lime_generic_def::{Function, Gate, InputResult, InputResults, OperationType};
+use lime_generic_def::{Function, Gate, InputIndices, OperationType};
 use quote::{ToTokens, quote};
 use syn::{Error, Result};
+
+use crate::generic::ast::IntOrStar;
 
 use super::{
     CellType, OperandsValue,
@@ -20,7 +21,7 @@ pub struct Operations(pub HashMap<String, OperationType<CellType>>);
 impl Operations {
     pub fn new(operations: &NamedOperands, ast: &ast::Architecture) -> Result<Self> {
         let mut result = HashMap::new();
-        for operation in &ast.inner.operations.elements {
+        for operation in ast.inner.operations.value.iter() {
             let name = operation.name.to_string();
             let Entry::Vacant(entry) = result.entry(name) else {
                 return Err(Error::new(
@@ -28,31 +29,29 @@ impl Operations {
                     "duplicate operation name",
                 ));
             };
-            let input = operations.by_ident(&operation.input)?;
-            let input_results = operation
-                .input_results
+            let input = operations.by_ident(&operation.input.value)?;
+            let input_target = match operation
+                .input_target_idx
+                .0
                 .as_ref()
-                .map(InputResults::try_from)
-                .transpose()?
-                .unwrap_or(InputResults::new_unchanged());
-            if let Some(result_arity) = input_results.arity()
-                && input.arity() != Some(result_arity)
+                .map(|bracketed| &bracketed.value)
             {
-                return Err(Error::new(
-                    operation.input.span(),
-                    "operands arity does not match input result arity",
-                ));
-            }
-            let output = operation
-                .output_function
-                .as_ref()
-                .map(Function::try_from)
-                .transpose()?;
+                None => None,
+                Some(IntOrStar::Int(idx_lit)) => {
+                    let idx = idx_lit.base10_parse()?;
+                    if input.arity().is_none_or(|arity| idx >= arity) {
+                        return Err(Error::new(idx_lit.span(), "index out of bounds"));
+                    }
+                    Some(InputIndices::Index(idx))
+                }
+                Some(IntOrStar::Star(_)) => Some(InputIndices::All),
+            };
+            let function = (&operation.function).try_into()?;
             entry.insert(OperationType {
                 name: operation.name.to_string().into(),
                 input,
-                input_results,
-                output,
+                input_override: input_target,
+                function,
             });
         }
         Ok(Self(result))
@@ -78,84 +77,36 @@ impl ToTokens for OperationTypeValue<'_> {
         let OperationType {
             name,
             input,
-            input_results,
-            output,
+            input_override,
+            function,
         } = &self.0;
-        let (input, input_results) = (OperandsValue(input), InputResultsValue(input_results));
-        let output = match output {
-            None => quote!(None),
-            Some(output) => {
-                let output = FunctionValue(*output);
-                quote!(Some(#output))
-            }
-        };
+        let (input, input_override, function) = (
+            OperandsValue(input),
+            InputIndicesValue(input_override),
+            FunctionValue(*function),
+        );
         let krate = krate();
         tokens.extend(quote! {
             #krate::OperationType {
                 name: #name.into(),
                 input: #input,
-                input_results: #input_results,
-                output: #output,
+                input_override: #input_override,
+                function: #function
             }
         });
     }
 }
 
-impl TryFrom<&ast::InputResults> for InputResults {
-    type Error = Error;
+struct InputIndicesValue<'a>(&'a Option<InputIndices>);
 
-    fn try_from(value: &ast::InputResults) -> Result<Self> {
-        Ok(match value {
-            ast::InputResults::All(result) => InputResults::all(result.try_into()?),
-            ast::InputResults::Tuple(tuple) => InputResults::new(
-                tuple
-                    .elements
-                    .iter()
-                    .map(|result| result.try_into())
-                    .try_collect()?,
-            ),
-        })
-    }
-}
-
-struct InputResultsValue<'a>(&'a InputResults);
-
-impl ToTokens for InputResultsValue<'_> {
+impl ToTokens for InputIndicesValue<'_> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let krate = krate();
-        let results = self.0.iter().copied().map(InputResultValue);
-        tokens.extend(quote! {
-            #krate::InputResults::new(vec![
-                #(#results),*
-            ])
-        });
-    }
-}
-
-impl TryFrom<&ast::InputResult> for InputResult {
-    type Error = Error;
-
-    fn try_from(value: &ast::InputResult) -> Result<Self> {
-        Ok(match value {
-            ast::InputResult::Unchanged(_) => Self::Unchanged,
-            ast::InputResult::Function(func) => Self::Function(func.try_into()?),
+        tokens.extend(match self.0 {
+            None => quote!(None),
+            Some(InputIndices::All) => quote!(Some(#krate::InputIndices::All)),
+            Some(InputIndices::Index(idx)) => quote!(Some(#krate::InputIndices::Index(#idx))),
         })
-    }
-}
-
-struct InputResultValue(InputResult);
-
-impl ToTokens for InputResultValue {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let krate = krate();
-        let variant = match self.0 {
-            InputResult::Unchanged => quote!(Unchanged),
-            InputResult::Function(f) => {
-                let f = FunctionValue(f);
-                quote!(Function(#f))
-            }
-        };
-        tokens.extend(quote!(#krate::InputResult::#variant))
     }
 }
 
