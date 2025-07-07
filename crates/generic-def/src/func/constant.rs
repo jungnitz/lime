@@ -20,11 +20,17 @@ impl EvaluationMethods for ConstEval {
         }
     }
 
-    fn hint_to_ident(&self, _arity: Option<usize>, _inverted: bool) -> Option<BoolHint> {
+    fn hint_id(&self, _arity: Option<usize>, _inverted: Option<bool>) -> Option<BoolHint> {
+        None
+    }
+
+    fn id_inverted(&self) -> Option<bool> {
         None
     }
 
     fn add(&mut self, _value: bool) {}
+
+    fn add_unknown(&mut self) {}
 
     fn evaluate(&self) -> Option<bool> {
         Some(self.const_value)

@@ -4,7 +4,7 @@ use derive_more::Deref;
 
 use crate::{BoolSet, Cell, CellType, Operands};
 
-#[derive(Deref)]
+#[derive(Deref, Clone)]
 #[deref(forward)]
 pub struct Outputs<CT>(Arc<[Operands<CT>]>);
 

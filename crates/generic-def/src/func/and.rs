@@ -3,14 +3,14 @@ use crate::BoolHint;
 
 pub struct AndEval {
     count: u8,
-    value: bool,
+    value: Option<bool>,
 }
 
 impl AndEval {
     pub fn new() -> Self {
         Self {
             count: 0,
-            value: true,
+            value: Some(true),
         }
     }
 }
@@ -19,13 +19,15 @@ impl EvaluationMethods for AndEval {
     fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint> {
         if target {
             // target is true -> all operands have to be true
-            if self.value {
+            if let Some(value) = self.value
+                && value
+            {
                 Some(BoolHint::Require(target))
             } else {
                 None
             }
-        } else if self.value {
-            // target is false and all previous operands were false
+        } else if self.value.unwrap_or(true) {
+            // target is false and all previous operands were true or unknown
             if Some(usize::from(self.count) + 1) == arity {
                 // only one left, this needs to flip the value to false
                 Some(BoolHint::Require(false))
@@ -39,18 +41,29 @@ impl EvaluationMethods for AndEval {
         }
     }
 
-    fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint> {
-        if inverted {
+    fn hint_id(&self, arity: Option<usize>, inverted: Option<bool>) -> Option<BoolHint> {
+        if inverted == Some(true) {
             return None;
         }
-        if let Some(arity) = arity {
+        let Some(value) = self.value else {
+            return None;
+        };
+        if !value {
+            None
+        } else if let Some(arity) = arity {
             if self.count + 1 == arity as u8 {
                 Some(BoolHint::Any)
             } else {
                 Some(BoolHint::Require(true))
             }
-        } else if self.value {
+        } else {
             Some(BoolHint::Any)
+        }
+    }
+
+    fn id_inverted(&self) -> Option<bool> {
+        if self.value == Some(true) {
+            Some(false)
         } else {
             None
         }
@@ -58,15 +71,17 @@ impl EvaluationMethods for AndEval {
 
     fn add(&mut self, value: bool) {
         self.count += 1;
-        self.value &= value;
+        if !value {
+            self.value = Some(false);
+        }
+    }
+
+    fn add_unknown(&mut self) {
+        self.value = None;
     }
 
     fn evaluate(&self) -> Option<bool> {
-        if self.count == 0 {
-            None
-        } else {
-            Some(self.value)
-        }
+        if self.count == 0 { None } else { self.value }
     }
 }
 

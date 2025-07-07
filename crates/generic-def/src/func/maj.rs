@@ -1,16 +1,16 @@
 use crate::{BoolHint, func::EvaluationMethods};
 
 pub struct MajEval {
-    nums: [u8; 2],
+    nums: [u8; 3],
 }
 
 impl MajEval {
     pub fn new() -> Self {
-        Self { nums: [0, 0] }
+        Self { nums: [0, 0, 0] }
     }
 
     fn count(&self) -> usize {
-        (self.nums[0] + self.nums[1]).into()
+        self.nums.iter().sum::<u8>().into()
     }
 }
 
@@ -35,8 +35,8 @@ impl EvaluationMethods for MajEval {
         }
     }
 
-    fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint> {
-        if inverted {
+    fn hint_id(&self, arity: Option<usize>, inverted: Option<bool>) -> Option<BoolHint> {
+        if inverted == Some(true) || self.nums[2] != 0 {
             return None;
         }
         if self.nums[0] == self.nums[1] {
@@ -70,15 +70,33 @@ impl EvaluationMethods for MajEval {
         }
     }
 
+    fn id_inverted(&self) -> Option<bool> {
+        if self.nums[0] == self.nums[1] && self.nums[2] == 0 {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
     fn add(&mut self, value: bool) {
         self.nums[value as usize] += 1
+    }
+
+    fn add_unknown(&mut self) {
+        self.nums[2] += 1;
     }
 
     fn evaluate(&self) -> Option<bool> {
         if self.count() % 2 != 1 {
             None
         } else {
-            Some(self.nums[1] > self.nums[0])
+            let value = self.nums[1] > self.nums[0];
+            let diff = self.nums[value as usize] - self.nums[!value as usize];
+            if diff <= self.nums[2] {
+                None
+            } else {
+                Some(value)
+            }
         }
     }
 }

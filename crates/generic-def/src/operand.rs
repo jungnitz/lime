@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use derive_more::{Deref, From};
 
@@ -14,7 +14,7 @@ pub struct Operand<CT> {
 
 impl<CT> Display for Operand<CT>
 where
-    CT: Display + CellType,
+    CT: CellType,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         display_maybe_inverted(f, self.inverted)?;
@@ -31,11 +31,11 @@ pub struct OperandType<CT> {
 
 impl<CT> Display for OperandType<CT>
 where
-    CT: Display,
+    CT: CellType,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         display_maybe_inverted(f, self.inverted)?;
-        write!(f, "{}", self.typ)?;
+        write!(f, "{}", self.typ.name())?;
         display_opt_index(f, self.index)
     }
 }
@@ -168,7 +168,6 @@ mod tests {
                     (None, None) => BoolHint::Any,
                 };
                 let result = typ.try_fit_constant(hint);
-                println!("{typ:#?} {hint:?} {result:?}");
                 let possible = match (required, cell_value) {
                     (Some(required), Some(cell_value)) => required == cell_value ^ inverted,
                     _ => true,

@@ -15,6 +15,7 @@ pub use self::{
 };
 
 /// Abstractly describes a Logic-in-Memory architecture.
+#[derive(Clone)]
 pub struct Architecture<CT> {
     operations: Operations<CT>,
     outputs: Outputs<CT>,

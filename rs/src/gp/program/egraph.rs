@@ -1,14 +1,14 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, rc::Rc};
 
 use eggmock::egg::{EGraph, Id, Language};
 use lime_generic_def::Operation;
 
-pub type ProgramEGraph<A> = EGraph<ProgramLanguage<Operation<A>>, ()>;
+pub type ProgramEGraph<CT> = EGraph<ProgramLanguage<Operation<CT>>, ()>;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProgramLanguage<O> {
     Seq([Id; 2]),
-    Op(O),
+    Op(Rc<O>),
 }
 
 impl<O> Language for ProgramLanguage<O>

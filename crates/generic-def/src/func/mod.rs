@@ -128,8 +128,10 @@ impl Display for Function {
 
 trait EvaluationMethods {
     fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
-    fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint>;
+    fn hint_id(&self, arity: Option<usize>, inverted: Option<bool>) -> Option<BoolHint>;
+    fn id_inverted(&self) -> Option<bool>;
     fn add(&mut self, value: bool);
+    fn add_unknown(&mut self);
     fn evaluate(&self) -> Option<bool>;
 }
 
@@ -142,11 +144,20 @@ impl FunctionEvaluation {
     pub fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint> {
         self.gate.hint(arity, target ^ self.inverted)
     }
-    pub fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint> {
-        self.gate.hint_to_ident(arity, inverted ^ self.inverted)
+    pub fn hint_id(&self, arity: Option<usize>, inverted: Option<bool>) -> Option<BoolHint> {
+        self.gate
+            .hint_id(arity, inverted.map(|inverted| inverted ^ self.inverted))
+    }
+    pub fn id_inverted(&self) -> Option<bool> {
+        self.gate
+            .id_inverted()
+            .map(|inverted| inverted ^ self.inverted)
     }
     pub fn add(&mut self, value: bool) {
         self.gate.add(value);
+    }
+    pub fn add_unknown(&mut self) {
+        self.gate.add_unknown();
     }
     pub fn evaluate(&self) -> Option<bool> {
         self.gate.evaluate().map(|v| v ^ self.inverted)
@@ -167,8 +178,10 @@ impl GateEvaluation {
             Self::Const(c) => c,
         } {
             fn hint(&self, arity: Option<usize>, target: bool) -> Option<BoolHint>;
-            fn hint_to_ident(&self, arity: Option<usize>, inverted: bool) -> Option<BoolHint>;
+            fn hint_id(&self, arity: Option<usize>, inverted: Option<bool>) -> Option<BoolHint>;
+            fn id_inverted(&self) -> Option<bool>;
             fn add(&mut self, value: bool);
+            fn add_unknown(&mut self);
             fn evaluate(&self) -> Option<bool>;
         }
     }

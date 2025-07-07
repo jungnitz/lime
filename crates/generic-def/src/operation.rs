@@ -56,7 +56,7 @@ pub struct Operation<CT> {
 
 impl<CT> Display for Operation<CT>
 where
-    CT: Display + CellType,
+    CT: CellType,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

@@ -49,12 +49,12 @@ impl<CT> Cell<CT> {
     }
 }
 
-impl<CT: Display + CellType> Display for Cell<CT> {
+impl<CT: CellType> Display for Cell<CT> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.0 == CT::CONSTANT {
             write!(f, "{}", self.1 != 0)
         } else {
-            write!(f, "{}", self.0)?;
+            write!(f, "{}", self.0.name())?;
             display_index(f, self.1)
         }
     }
