@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::hash::Hash;
 
@@ -12,7 +13,7 @@ pub trait CellType: Copy + Debug + PartialEq + Eq + Hash + PartialOrd + Ord {
 
     /// Number of cells of this type or `None` if infinite amount is available.
     fn count(self) -> Option<CellIndex>;
-    fn name(self) -> &'static str;
+    fn name(self) -> Cow<'static, str>;
     fn constant(value: bool) -> Cell<Self> {
         Cell::new(Self::CONSTANT, value as CellIndex)
     }
@@ -37,6 +38,10 @@ impl<CT: CellType> Cell<CT> {
         } else {
             None
         }
+    }
+
+    pub fn map_type<To: CellType>(self, map: impl FnOnce(CT) -> To) -> Cell<To> {
+        Cell::new(map(self.0), self.1)
     }
 }
 

@@ -19,6 +19,9 @@ itertools = "0.14.0"
 convert_case = "0.8.0"
 delegate = "0.13.3"
 blanket = "0.4.0"
+petgraph = "0.8.2"
+tracing = "0.1"
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
 
 [workspace.lints.rust]
 unused_extern_crates = "forbid"

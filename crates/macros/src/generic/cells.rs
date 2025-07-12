@@ -120,11 +120,11 @@ impl ToTokens for Cells {
                         #(Self::#name_idents => #arities),*
                     }
                 }
-                fn name(self) -> &'static str {
+                fn name(self) -> std::borrow::Cow<'static, str> {
                     match self {
                         Self::Constant => "bool",
                         #(Self::#name_idents => #name_strs),*
-                    }
+                    }.into()
                 }
             }
             impl std::fmt::Display for #name {

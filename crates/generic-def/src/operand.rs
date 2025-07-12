@@ -12,6 +12,15 @@ pub struct Operand<CT> {
     pub inverted: bool,
 }
 
+impl<CT: CellType> Operand<CT> {
+    pub fn map_cell_type<NewCT: CellType>(self, map: impl FnOnce(CT) -> NewCT) -> Operand<NewCT> {
+        Operand {
+            cell: Cell::new(map(self.cell.typ()), self.cell.index()),
+            inverted: self.inverted,
+        }
+    }
+}
+
 impl<CT> Display for Operand<CT>
 where
     CT: CellType,

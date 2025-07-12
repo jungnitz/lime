@@ -57,6 +57,8 @@ fn display_opt_index<D: Display>(f: &mut Formatter<'_>, idx: Option<D>) -> std::
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use super::*;
 
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -77,12 +79,13 @@ mod tests {
             }
         }
 
-        fn name(self) -> &'static str {
+        fn name(self) -> Cow<'static, str> {
             match self {
                 Self::Constant => "bool",
                 Self::A => "A",
                 Self::B => "B",
             }
+            .into()
         }
     }
 }

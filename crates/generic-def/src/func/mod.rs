@@ -135,6 +135,7 @@ trait EvaluationMethods {
     fn evaluate(&self) -> Option<bool>;
 }
 
+#[derive(Debug)]
 pub struct FunctionEvaluation {
     inverted: bool,
     gate: GateEvaluation,
@@ -164,6 +165,7 @@ impl FunctionEvaluation {
     }
 }
 
+#[derive(Debug)]
 pub enum GateEvaluation {
     And(AndEval),
     Maj(MajEval),

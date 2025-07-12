@@ -19,6 +19,9 @@ derive_more = { workspace = true }
 paste = { workspace = true }
 itertools = { workspace = true }
 blanket = { workspace = true }
+petgraph = { workspace = true }
+tracing = { workspace = true }
+test-log = { workspace = true }
 
 [build-dependencies]
 eggmock = { workspace = true }

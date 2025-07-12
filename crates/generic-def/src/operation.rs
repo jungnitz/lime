@@ -47,16 +47,17 @@ impl<CT> Ord for OperationType<CT> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Operation<CT> {
-    pub typ: OperationType<CT>,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Operation<CT, TypCT = CT> {
+    pub typ: OperationType<TypCT>,
     pub inputs: Vec<Operand<CT>>,
     pub outputs: Vec<Operand<CT>>,
 }
 
-impl<CT> Display for Operation<CT>
+impl<CT, TypCT> Display for Operation<CT, TypCT>
 where
     CT: CellType,
+    TypCT: CellType,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

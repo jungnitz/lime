@@ -85,6 +85,17 @@ impl<CT: CellType> Operands<CT> {
         }
     }
 
+    pub fn single_operands(&self) -> impl Iterator<Item = OperandType<CT>> {
+        match self {
+            Self::Tuples(tuples) => Either::Left(
+                tuples
+                    .iter()
+                    .filter_map(|tuple| (tuple.as_slice().len() == 1).then(|| tuple[0])),
+            ),
+            Self::Nary(nary) => Either::Right(nary.0.iter().copied()),
+        }
+    }
+
     /// Returns the inverted-values for which using **only** the given cell for the described
     /// operands described is valid
     pub fn fit_cell(&self, cell: Cell<CT>) -> BoolSet {

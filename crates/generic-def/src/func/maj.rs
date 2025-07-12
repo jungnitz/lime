@@ -1,5 +1,6 @@
 use crate::{BoolHint, func::EvaluationMethods};
 
+#[derive(Debug)]
 pub struct MajEval {
     nums: [u8; 3],
 }

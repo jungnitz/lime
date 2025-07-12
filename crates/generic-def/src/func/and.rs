@@ -1,6 +1,7 @@
 use super::EvaluationMethods;
 use crate::BoolHint;
 
+#[derive(Debug)]
 pub struct AndEval {
     count: u8,
     value: Option<bool>,
@@ -77,7 +78,9 @@ impl EvaluationMethods for AndEval {
     }
 
     fn add_unknown(&mut self) {
-        self.value = None;
+        if self.value == Some(true) {
+            self.value = None;
+        }
     }
 
     fn evaluate(&self) -> Option<bool> {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derive_more::Deref;
 
-use crate::{BoolSet, Cell, CellType, Operands};
+use crate::{BoolSet, Cell, CellType, OperandType, Operands};
 
 #[derive(Deref, Clone)]
 #[deref(forward)]
@@ -21,5 +21,9 @@ impl<CT: CellType> Outputs<CT> {
     /// See: [Operands::fit_cell]
     pub fn fit_cell(&self, cell: Cell<CT>) -> BoolSet {
         self.iter().map(|ops| ops.fit_cell(cell)).collect()
+    }
+    /// See: [Operands::single_operands]
+    pub fn single_operands(&self) -> impl Iterator<Item = OperandType<CT>> {
+        self.iter().flat_map(|ops| ops.single_operands())
     }
 }

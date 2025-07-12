@@ -1,6 +1,7 @@
 use super::EvaluationMethods;
 use crate::BoolHint;
 
+#[derive(Debug)]
 pub struct ConstEval {
     const_value: bool,
 }
