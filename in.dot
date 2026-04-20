@@ -1,0 +1,25 @@
+digraph {
+rankdir=BT;
+0 [label="0",shape=box,style=filled,fillcolor=snow2]
+1 [label="1",shape=triangle,style=filled,fillcolor=snow2]
+2 [label="2",shape=triangle,style=filled,fillcolor=snow2]
+3 [label="3",shape=triangle,style=filled,fillcolor=snow2]
+4 [label="4",shape=ellipse,style=filled,fillcolor=white]
+5 [label="5",shape=ellipse,style=filled,fillcolor=white]
+6 [label="6",shape=ellipse,style=filled,fillcolor=white]
+po0 [shape=invtriangle,style=filled,fillcolor=snow2]
+0 -> 4 [style=solid]
+2 -> 4 [style=solid]
+3 -> 4 [style=solid]
+0 -> 5 [style=solid]
+1 -> 5 [style=solid]
+3 -> 5 [style=dashed]
+0 -> 6 [style=dashed]
+4 -> 6 [style=solid]
+5 -> 6 [style=solid]
+6 -> po0 [style=solid]
+{rank = same; 0; 1; 2; 3; }
+{rank = same; 4; 5; }
+{rank = same; 6; }
+{rank = same; po0; }
+}
